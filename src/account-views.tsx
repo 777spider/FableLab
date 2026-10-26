@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { JobDTO, ShareDTO } from '../shared/contracts';
 import { forestArt, lighthouseArt } from './art';
 import { libraryPresets, presetURL } from './preset';
@@ -88,9 +88,9 @@ export function bookCreationDate(value: string): string {
   return Number.isNaN(date.getTime()) ? '' : [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('.');
 }
 
-export function LibraryView({ jobs, loading, error, legacyCount, importing, onImport, onRetry }: {
+export function LibraryView({ jobs, loading, error, legacyCount, importing, onImport, onRetry, onOpenBook }: {
   jobs: JobDTO[]; loading: boolean; error: string; legacyCount: number; importing: boolean;
-  onImport: () => void; onRetry: () => void;
+  onImport: () => void; onRetry: () => void; onOpenBook: (job: JobDTO) => void;
 }) {
   const books = [...libraryPresets, ...jobs.filter(job => !libraryPresets.some(example => example.id === job.id))];
   const [openingId, setOpeningId] = useState('');
@@ -104,35 +104,35 @@ export function LibraryView({ jobs, loading, error, legacyCount, importing, onIm
     window.addEventListener('pageshow', reset); window.addEventListener('pagehide', reset);
     return () => { window.removeEventListener('pageshow', reset); window.removeEventListener('pagehide', reset); cancel(); };
   }, []);
-  function openBook(event: React.MouseEvent<HTMLAnchorElement>, id: string) {
+  function openBook(event: React.MouseEvent<HTMLAnchorElement>, job: JobDTO) {
     const link = event.currentTarget;
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.hasAttribute('download') || (link.target && link.target !== '_self')) return;
     if (opening.current) { event.preventDefault(); return; }
-    if (!window.matchMedia || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { event.preventDefault(); onOpenBook(job); return; }
     const cover = link.querySelector<HTMLElement>('.book-cover');
     const face = link.querySelector<HTMLElement>('.book-cover-face');
-    if (!cover?.animate || !face?.animate) return;
+    if (!cover?.animate || !face?.animate) { event.preventDefault(); onOpenBook(job); return; }
     const animations: Animation[] = [];
     try {
-      const timing: KeyframeAnimationOptions = { duration: 300, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'forwards' };
+      const timing: KeyframeAnimationOptions = { duration: 170, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'forwards' };
       animations.push(cover.animate([{ transform: getComputedStyle(cover).transform }, { transform: 'translateY(-9px) rotate(-.8deg)', offset: .35 }, { transform: 'translateY(-9px) rotate(-.8deg)' }], timing));
       const turn = face.animate([{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(0deg)', offset: .3 }, { transform: 'rotateY(-38deg)' }], timing);
       animations.push(turn);
-      const href = link.href;
       const pending = { animations, timer: 0, navigating: false };
       const navigate = () => {
         if (opening.current !== pending || pending.navigating) return;
         pending.navigating = true; window.clearTimeout(pending.timer);
-        location.assign(href);
+        cover.style.viewTransitionName = 'fable-open-book';
+        onOpenBook(job);
       };
-      pending.timer = window.setTimeout(navigate, 360);
+      pending.timer = window.setTimeout(navigate, 190);
       opening.current = pending;
       turn.finished.then(navigate, navigate);
-      setOpeningId(id); event.preventDefault();
+      setOpeningId(job.id); event.preventDefault();
     } catch {
       if (opening.current?.animations === animations) { window.clearTimeout(opening.current.timer); opening.current = null; }
       animations.forEach(animation => animation.cancel());
-      // Keep the link's native navigation if animation setup is unavailable.
+      event.preventDefault(); onOpenBook(job);
     }
   }
   return <main id="main" className="library-page"><div className="library-heading"><h1>我的书架<span>{books.length}</span></h1><a className="button primary" href="/learn">新故事 <Arrow /></a></div>
@@ -142,7 +142,37 @@ export function LibraryView({ jobs, loading, error, legacyCount, importing, onIm
   </main>;
 }
 
-function LibraryBook({ job, index, opening, onOpen }: { job: JobDTO; index: number; opening: boolean; onOpen: (event: React.MouseEvent<HTMLAnchorElement>, id: string) => void }) {
+function CoverTitle({ title }: { title: string }) {
+  const area = useRef<HTMLDivElement>(null);
+  const text = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const box = area.current, heading = text.current;
+    if (!box || !heading) return;
+    let frame = 0, disposed = false;
+    const fit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (disposed || !box.clientWidth || !box.clientHeight) return;
+        heading.style.fontSize = '';
+        heading.style.removeProperty('--cover-title-lines');
+        let low = 14, high = Math.max(14, parseFloat(getComputedStyle(heading).fontSize));
+        for (let step = 0; step < 9; step++) {
+          const size = (low + high) / 2; heading.style.fontSize = `${size}px`;
+          if (heading.scrollHeight <= box.clientHeight && heading.scrollWidth <= box.clientWidth) low = size; else high = size;
+        }
+        heading.style.fontSize = `${Math.floor(low * 10) / 10}px`;
+        heading.style.setProperty('--cover-title-lines', String(Math.max(1, Math.floor(box.clientHeight / parseFloat(getComputedStyle(heading).lineHeight)))));
+      });
+    };
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
+    observer?.observe(box); window.addEventListener('resize', fit);
+    document.fonts?.addEventListener('loadingdone', fit); document.fonts?.ready.then(() => { if (!disposed) fit(); }); fit();
+    return () => { disposed = true; cancelAnimationFrame(frame); observer?.disconnect(); window.removeEventListener('resize', fit); document.fonts?.removeEventListener('loadingdone', fit); };
+  }, [title]);
+  return <div className="book-title-space" ref={area}><strong ref={text} title={title}>{title}</strong></div>;
+}
+
+function LibraryBook({ job, index, opening, onOpen }: { job: JobDTO; index: number; opening: boolean; onOpen: (event: React.MouseEvent<HTMLAnchorElement>, job: JobDTO) => void }) {
   const [failedCover, setFailedCover] = useState(false);
   const cover = !failedCover && job.stories.flatMap(s => s.pages).find(p => p.image.status === 'ready' && p.image.url)?.image.url;
   const title = job.stories[0]?.title || job.concept;
@@ -150,7 +180,7 @@ function LibraryBook({ job, index, opening, onOpen }: { job: JobDTO; index: numb
   const shape = ['tall', 'compact', 'medium'][index % 3];
   const date = bookCreationDate(job.createdAt);
   const href = job.provenance === 'preset' ? presetURL(job) : `/learn?${new URLSearchParams({ job: job.id, mode: job.format })}`;
-  return <a className={`library-book book-${shape} ${cover ? 'has-cover' : ''} ${opening ? 'is-opening' : ''}`} href={href} onClick={event => onOpen(event, job.id)}><div className="book-cover"><div className="book-pages" aria-hidden="true" /><div className="book-cover-face">{cover ? <img src={cover} alt="" loading="lazy" onError={() => setFailedCover(true)} /> : <div className="type-cover"><span>fablelab.</span><strong>{title}</strong><i aria-hidden="true">◇</i></div>}<span className="book-open" aria-hidden="true">翻开 ↗</span></div></div><div className="book-details"><h2>{title}</h2><p>{job.concept}{status && <span>{status}</span>}</p>{date && <time dateTime={job.createdAt}>{date} {job.format === 'comic' ? '作画' : '写下'}</time>}</div></a>;
+  return <a className={`library-book book-${shape} ${cover ? 'has-cover' : ''} ${opening ? 'is-opening' : ''}`} data-book-id={job.id} href={href} onClick={event => onOpen(event, job)}><div className="book-cover"><div className="book-pages" aria-hidden="true" /><div className="book-cover-face">{cover ? <img src={cover} alt="" loading="lazy" onError={() => setFailedCover(true)} /> : <div className="type-cover"><span>fablelab.</span><CoverTitle title={title} /><i aria-hidden="true">◇</i></div>}{date && <time className="book-date" dateTime={job.createdAt}>{date} {job.format === 'comic' ? '作画' : '写下'}</time>}<span className="book-open" aria-hidden="true">翻开 ↗</span></div></div><div className="book-details"><h2>{title}</h2><p>{job.concept}{status && <span>{status}</span>}</p></div></a>;
 }
 
 export function SharePanel({ job, share, known, loading, busy, error, notice, onCreate, onRevoke, onReload, onClose }: {

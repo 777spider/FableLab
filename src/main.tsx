@@ -1,10 +1,11 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { flushSync } from 'react-dom';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import type { JobDTO, LearningFormat, SessionResponse, ShareDTO, SharedModuleDTO, TaskDTO, UserDTO } from '../shared/contracts';
 import { api, ApiError, upsert } from './api';
 import { AccountPage, authURL, bookCreationDate, type AuthFields, type AuthView, LibraryView, RecoveryPage, safeReturnTo, SharePanel, UnavailablePage } from './account-views';
-import { libraryPresets, preset, presetForDemo } from './preset';
+import { libraryPresets, preset, presetForDemo, presetURL } from './preset';
 import { forestArt, presetArtSize } from './art';
 import './styles.css';
 import './account.css';
@@ -97,7 +98,7 @@ function Question({ task }: { task: TaskDTO }) {
   return <section className="question"><h3>{task.kind === 'comparison' ? '把两个故事放在一起' : task.kind === 'comprehension' ? '回到故事里' : '换一个情境'}</h3><Prose text={task.prompt} /><div className="answer-options">{task.options.map((option, index) => <button type="button" key={option.id} aria-pressed={answer === option.id} onClick={() => setAnswer(option.id)}><span>{String.fromCharCode(65 + index)}</span>{option.text}</button>)}</div>{answer && <div className="answer-feedback" role="status"><strong>{answer === task.correctAnswer ? '这个判断有依据。' : '再看看其中的关系。'}</strong><Prose text={task.explanation} /></div>}</section>;
 }
 
-function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction, readOnly = false, storageScope = 'preset', shareControl }: { job: JobDTO; format: LearningFormat; busy?: boolean; onFormat: (f: LearningFormat) => void; onAction?: (a: 'pause' | 'resume') => void; readOnly?: boolean; storageScope?: string; shareControl?: React.ReactNode }) {
+function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction, readOnly = false, storageScope = 'preset', shareControl, bookArrival = false }: { job: JobDTO; format: LearningFormat; busy?: boolean; onFormat: (f: LearningFormat) => void; onAction?: (a: 'pause' | 'resume') => void; readOnly?: boolean; storageScope?: string; shareControl?: React.ReactNode; bookArrival?: boolean }) {
   const comicAvailable = !isDemo(job) || job.stories.some(story => story.pages.some(page => page.image.status === 'ready' && page.image.url));
   const format = comicAvailable ? requestedFormat : 'text';
   const storageKey = `fable-studio:page:${storageScope}:${job.id}`;
@@ -137,7 +138,7 @@ function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction
     document.addEventListener('keydown', keys); return () => document.removeEventListener('keydown', keys);
   }, [index, canNext, pages.length]);
   if (pages.length === 0) return <section className="reader-loading"><span className="loading-line" /><span className="loading-line" /><span className="loading-line" /><h2>故事正在成篇。</h2><p>写好的内容会先出现在这里。</p></section>;
-  return <section className={`reader reader-${format}`} aria-label="阅读故事">
+  return <section className={`reader reader-${format}`} aria-label="阅读故事" data-book-arrival={bookArrival || undefined}>
     <header className="reader-top"><span>{job.concept}{job.provenance === 'preset' && <span className="preset-note">预置示例</span>}</span><div className="reader-tools"><FormatSwitch format={format} onChange={onFormat} disabled={busy} comicDisabled={!comicAvailable} />{shareControl}</div></header>
     {job.provenance !== 'preset' && <p className={`quality-note ${job.quality === 'needs_review' ? 'needs-review' : ''}`} role="status">{job.quality === 'pending' ? '初稿可读，学理复核中' : job.quality === 'needs_review' ? '这份内容仍需复核，请结合教材与原始文献核对。' : '机器初检完成，学术来源待核验'}</p>}
     <nav className="story-tabs" aria-label="故事与学理">{job.stories.map((story, i) => <button type="button" key={story.id} disabled={!story.pages.length} aria-current={shown && shown.si === i ? 'page' : undefined} onClick={() => story.pages[0] && choose(`${story.id}/${story.pages[0].id}`)}>{job.stories.length > 1 && <span>{String(i + 1).padStart(2, '0')}</span>}{story.title}</button>)}<div className="notes-tabs"><button type="button" disabled={!job.lesson} aria-current={isLesson ? 'page' : undefined} onClick={() => choose('lesson')} title="学术解析">解</button><button type="button" disabled={!job.lesson} aria-current={index === pages.length + 1 ? 'page' : undefined} onClick={() => choose('discussion')} title="讨论与应用">议</button></div></nav>
@@ -188,7 +189,9 @@ function PrivateEntry({ expired = false }: { expired?: boolean }) {
 
 function PageLoading() { return <main id="main" className="public-reading"><section className="reader-loading" aria-label="正在连接" aria-busy="true"><span className="loading-line" /><span className="loading-line" /><span className="loading-line" /></section></main>; }
 
-function LibraryController({ user, legacyCount, onSession, onAuthLost }: { user: UserDTO; legacyCount: number; onSession: (state: SessionResponse) => void; onAuthLost: () => void }) {
+type ShelfReturn = { x: number; y: number; bookId: string };
+
+function LibraryController({ user, legacyCount, onSession, onAuthLost, onOpenBook, restorePosition }: { user: UserDTO; legacyCount: number; onSession: (state: SessionResponse) => void; onAuthLost: () => void; onOpenBook: (job: JobDTO) => void; restorePosition: ShelfReturn | null }) {
   const [jobs, setJobs] = useState<JobDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -200,6 +203,15 @@ function LibraryController({ user, legacyCount, onSession, onAuthLost }: { user:
     api.jobs().then(result => { if (!cancelled) setJobs(result.jobs); }).catch(e => { if (cancelled) return; if (authRequired(e)) { setJobs([]); onAuthLost(); } else setError(publicMessage(e)); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [user.username, refresh]);
+  useEffect(() => {
+    if (loading || !restorePosition) return;
+    const frame = requestAnimationFrame(() => {
+      const book = Array.from(document.querySelectorAll<HTMLAnchorElement>('.library-book')).find(link => link.dataset.bookId === restorePosition.bookId);
+      book?.focus({ preventScroll: true });
+      window.scrollTo({ left: restorePosition.x, top: restorePosition.y, behavior: 'auto' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loading, restorePosition]);
   async function importRecords() {
     if (importing) return;
     setImporting(true); setError(''); setNotice('');
@@ -207,16 +219,16 @@ function LibraryController({ user, legacyCount, onSession, onAuthLost }: { user:
     catch (e) { if (authRequired(e)) onAuthLost(); else setError(publicMessage(e)); }
     finally { setImporting(false); }
   }
-  return <><LibraryView jobs={jobs} loading={loading} error={error} legacyCount={legacyCount} importing={importing} onImport={() => void importRecords()} onRetry={() => setRefresh(value => value + 1)} />{notice && <p className="library-import-notice" role="status">{notice}</p>}</>;
+  return <><LibraryView jobs={jobs} loading={loading} error={error} legacyCount={legacyCount} importing={importing} onImport={() => void importRecords()} onRetry={() => setRefresh(value => value + 1)} onOpenBook={onOpenBook} />{notice && <p className="library-import-notice" role="status">{notice}</p>}</>;
 }
 
-function Studio({ user, onAuthLost }: { user: UserDTO | null; onAuthLost: () => void }) {
+function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { user: UserDTO | null; onAuthLost: () => void; initialJob?: JobDTO | null; bookArrival?: boolean }) {
   const username = user?.username || 'guest';
   const params = new URLSearchParams(location.search);
   const [concept, setConcept] = useState(() => readPending(username)?.concept || readSession(draftKey(username)) || readSession(draftKey('guest')));
-  const [format, setFormat] = useState<LearningFormat>(modeFromURL);
+  const [format, setFormat] = useState<LearningFormat>(() => initialJob?.format || modeFromURL());
   const [jobs, setJobs] = useState<JobDTO[]>([]);
-  const [job, setJob] = useState<JobDTO | null>(() => { const example = presetForDemo(params.get('demo')); return example ? { ...example, format: modeFromURL() } : null; });
+  const [job, setJob] = useState<JobDTO | null>(() => { if (initialJob && (user || isDemo(initialJob))) return initialJob; const example = presetForDemo(params.get('demo')); return example ? { ...example, format: modeFromURL() } : null; });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
@@ -266,7 +278,7 @@ function Studio({ user, onAuthLost }: { user: UserDTO | null; onAuthLost: () => 
     const url = new URL(location.href); url.searchParams.set('mode', next.format);
     if (isDemo(next)) { url.searchParams.delete('job'); url.searchParams.set('demo', next.id === preset.id ? '1' : 'education-xai'); }
     else { url.searchParams.delete('demo'); url.searchParams.set('job', next.id); }
-    history.replaceState(null, '', url);
+    history.replaceState(history.state, '', url);
   }
   const accept = (next: JobDTO) => {
     if (selectedJob.current !== next.id) { setSharing(false); setShare(null); setShareKnown(false); setShareError(''); setShareNotice(''); }
@@ -277,12 +289,13 @@ function Studio({ user, onAuthLost }: { user: UserDTO | null; onAuthLost: () => 
     prepareActiveStorage(user.username);
     let cancelled = false;
     const id = params.get('job');
-    Promise.allSettled([api.jobs(), id ? api.job(id) : Promise.resolve(null)] as const).then(([list, current]) => {
+    const verify = <T,>(request: Promise<T>) => request.catch(e => { if (!cancelled && authRequired(e)) lostAuth(); throw e; });
+    Promise.allSettled([verify(api.jobs()), id ? verify(api.job(id)) : Promise.resolve(null)] as const).then(([list, current]) => {
       if (cancelled) return;
       if ((list.status === 'rejected' && authRequired(list.reason)) || (current.status === 'rejected' && authRequired(current.reason))) { lostAuth(); return; }
       if (list.status === 'fulfilled') setJobs(list.value.jobs); else setError(publicMessage(list.reason));
       if (current.status === 'fulfilled' && current.value) accept(current.value.job);
-      else if (current.status === 'rejected') setError(publicMessage(current.reason));
+      else if (current.status === 'rejected') { if (current.reason instanceof ApiError && [403, 404].includes(current.reason.status)) { selectedJob.current = ''; setJob(null); } setError(publicMessage(current.reason)); }
     });
     return () => { cancelled = true; };
   }, [user?.username]);
@@ -364,7 +377,7 @@ function Studio({ user, onAuthLost }: { user: UserDTO | null; onAuthLost: () => 
       {user ? <section className="bookshelf"><div className="shelf-heading"><h2><a href="/learn/library">我的书架 <Arrow /></a></h2><span>{jobs.length + libraryPresets.length}</span></div><div className="shelf-list">{[...libraryPresets, ...jobs.filter(item => !isDemo(item))].slice(0, 5).map((item, i) => <button type="button" key={item.id} className={`shelf-item ${job?.id === item.id ? 'selected' : ''}`} disabled={busy || shareBusy} onClick={() => openJob(item)}><span className="shelf-index">{String(i + 1).padStart(2, '0')}</span><span><strong>{item.stories[0]?.title || item.concept}</strong><small>{bookCreationDate(item.createdAt)}{item.format === 'comic' ? ' 作画' : ' 写下'}{item.status !== 'completed' && ` · ${label(item)}`}</small></span><span aria-hidden="true">↗</span></button>)}</div></section> : <p className="guest-compose-note"><a href={authURL('register')}>创建自己的书架</a>，故事下次接着读。</p>}
       <button type="button" className="workspace-demo" onClick={() => accept({ ...preset, format })} disabled={busy || shareBusy}>预置示例《雾港渡船》 <Arrow /></button>
     </aside>
-    {job ? <Collapsible.Root open={sharing} onOpenChange={changeShareOpen} asChild><div className={`reading-workspace ${sharing ? 'with-share' : ''}`}><Reader key={job.id} job={job} format={format} busy={busy} onFormat={changeFormat} onAction={performAction} storageScope={isDemo(job) ? 'preset' : username} shareControl={user && !isDemo(job) ? <Collapsible.Trigger asChild><button ref={shareTrigger} type="button" className="reader-share-button" disabled={shareBusy}>分享</button></Collapsible.Trigger> : undefined} /><Collapsible.Content ref={shareContent} className="share-disclosure"><SharePanel job={job} share={share} known={shareKnown} loading={shareLoading || (!shareKnown && !shareError)} busy={shareBusy} error={shareError} notice={shareNotice} onCreate={() => void changeSharing('publish')} onRevoke={() => void changeSharing('revoke')} onReload={() => { setShareError(''); setShareKnown(false); setShareRefresh(value => value + 1); }} onClose={() => changeShareOpen(false)} /></Collapsible.Content></div></Collapsible.Root> : <div className="reading-workspace"><Welcome format={format} onDemo={() => accept({ ...preset, format })} /></div>}
+    {job ? <Collapsible.Root open={sharing} onOpenChange={changeShareOpen} asChild><div className={`reading-workspace ${sharing ? 'with-share' : ''}`}><Reader key={job.id} job={job} format={format} busy={busy} onFormat={changeFormat} onAction={performAction} storageScope={isDemo(job) ? 'preset' : username} bookArrival={bookArrival} shareControl={user && !isDemo(job) ? <Collapsible.Trigger asChild><button ref={shareTrigger} type="button" className="reader-share-button" disabled={shareBusy}>分享</button></Collapsible.Trigger> : undefined} /><Collapsible.Content ref={shareContent} className="share-disclosure"><SharePanel job={job} share={share} known={shareKnown} loading={shareLoading || (!shareKnown && !shareError)} busy={shareBusy} error={shareError} notice={shareNotice} onCreate={() => void changeSharing('publish')} onRevoke={() => void changeSharing('revoke')} onReload={() => { setShareError(''); setShareKnown(false); setShareRefresh(value => value + 1); }} onClose={() => changeShareOpen(false)} /></Collapsible.Content></div></Collapsible.Root> : <div className="reading-workspace"><Welcome format={format} onDemo={() => accept({ ...preset, format })} /></div>}
   </main>;
 }
 
@@ -417,6 +430,11 @@ function OwnerPreviewPage({ user, onAuthLost }: { user: UserDTO; onAuthLost: () 
 }
 
 function SessionApp() {
+  const [route, setRoute] = useState(0);
+  const [openedBook, setOpenedBook] = useState<JobDTO | null>(null);
+  const [bookArrival, setBookArrival] = useState(false);
+  const [shelfReturn, setShelfReturn] = useState<ShelfReturn | null>(null);
+  const navigation = useRef<{ transition: ViewTransition | null; timer: number } | null>(null);
   const path = location.pathname.replace(/\/$/, '') || '/';
   const home = path === '/' || path === '/in';
   const auth = path === '/learn/auth';
@@ -428,17 +446,69 @@ function SessionApp() {
   const [expired, setExpired] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [recovery, setRecovery] = useState<{ code: string; username: string; returnTo: string } | null>(null);
+  function cancelBookTransition() {
+    const pending = navigation.current; navigation.current = null;
+    if (pending) { window.clearTimeout(pending.timer); pending.transition?.skipTransition(); }
+    delete document.documentElement.dataset.bookTransition;
+  }
+  useEffect(() => {
+    const back = () => {
+      cancelBookTransition(); setBookArrival(false); setOpenedBook(null);
+      const saved = history.state?.fableShelfReturn;
+      setShelfReturn(saved && Number.isFinite(saved.x) && Number.isFinite(saved.y) && typeof saved.bookId === 'string' ? saved : null);
+      setRoute(value => value + 1);
+    };
+    window.addEventListener('popstate', back);
+    return () => { window.removeEventListener('popstate', back); cancelBookTransition(); };
+  }, []);
+  function openBook(book: JobDTO) {
+    if (navigation.current || !session.user) return;
+    const pending = { transition: null as ViewTransition | null, timer: 0 }; navigation.current = pending;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let committed = false;
+    const commit = () => {
+      if (committed || navigation.current !== pending) return;
+      committed = true;
+      history.replaceState({ ...history.state, fableShelfReturn: { x: scrollX, y: scrollY, bookId: book.id } }, '');
+      const href = isDemo(book) ? presetURL(book) : `/learn?${new URLSearchParams({ job: book.id, mode: book.format })}`;
+      history.pushState({ fableBook: true }, '', href);
+      flushSync(() => { setOpenedBook(book); setBookArrival(!reduce); setShelfReturn(null); setRoute(value => value + 1); });
+      const heading = document.querySelector<HTMLHeadingElement>('.reader .page-heading h1');
+      const reader = document.querySelector<HTMLElement>('.reader');
+      const bounds = heading?.getBoundingClientRect();
+      if (bounds && (bounds.top < 0 || bounds.bottom > innerHeight - 30)) reader?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      heading?.focus({ preventScroll: true });
+    };
+    const done = () => {
+      if (navigation.current !== pending) return;
+      window.clearTimeout(pending.timer); navigation.current = null;
+      delete document.documentElement.dataset.bookTransition; setBookArrival(false);
+    };
+    if (reduce) { commit(); done(); return; }
+    if (typeof document.startViewTransition === 'function') {
+      document.documentElement.dataset.bookTransition = 'native';
+      try {
+        pending.transition = document.startViewTransition(commit);
+        pending.transition.ready.catch(() => {});
+        pending.transition.finished.then(done, () => { commit(); done(); });
+        pending.timer = window.setTimeout(() => { pending.transition?.skipTransition(); commit(); done(); }, 390);
+        return;
+      } catch { /* Same-page reading remains available if snapshots cannot start. */ }
+    }
+    document.documentElement.dataset.bookTransition = 'fallback'; commit();
+    pending.timer = window.setTimeout(done, 170);
+  }
   useEffect(() => {
     let cancelled = false; setChecking(true); setSessionError('');
     api.session().then(result => { if (!cancelled) setSession(result); }).catch(e => { if (!cancelled) setSessionError(publicMessage(e)); }).finally(() => { if (!cancelled) setChecking(false); });
     return () => { cancelled = true; };
   }, [refresh]);
-  function authLost() { setSession({ user: null, legacyImportCount: 0 }); setExpired(true); setRecovery(null); }
-  async function logout() { await api.logout(); clearPrivateStorage(); setSession({ user: null, legacyImportCount: 0 }); setRecovery(null); location.replace('/in'); }
+  function authLost() { cancelBookTransition(); setOpenedBook(null); setBookArrival(false); setSession({ user: null, legacyImportCount: 0 }); setExpired(true); setRecovery(null); }
+  async function logout() { await api.logout(); cancelBookTransition(); setOpenedBook(null); clearPrivateStorage(); setSession({ user: null, legacyImportCount: 0 }); setRecovery(null); location.replace('/in'); }
   if (preview && session.user && !checking) return <OwnerPreviewPage key={session.user.username} user={session.user} onAuthLost={authLost} />;
   return <><Header user={session.user} current={home ? 'home' : library ? 'library' : !auth ? 'studio' : undefined} onLogout={logout} />
     {sessionError && <div className="account-banner" role="status">{sessionError}<button type="button" onClick={() => setRefresh(value => value + 1)}>重新连接</button></div>}
-    {recovery ? <RecoveryPage code={recovery.code} username={recovery.username} returnTo={recovery.returnTo} /> : home ? <Home /> : auth ? <AuthController onSession={setSession} onRecovery={setRecovery} /> : checking ? <PageLoading /> : (library || preview) && !session.user ? <PrivateEntry expired={expired} /> : library && session.user ? <LibraryController key={session.user.username} user={session.user} legacyCount={session.legacyImportCount} onSession={setSession} onAuthLost={authLost} /> : <Studio key={session.user?.username || 'guest'} user={session.user} onAuthLost={authLost} />}
+    {recovery ? <RecoveryPage code={recovery.code} username={recovery.username} returnTo={recovery.returnTo} /> : home ? <Home /> : auth ? <AuthController onSession={setSession} onRecovery={setRecovery} /> : checking ? <PageLoading /> : (library || preview) && !session.user ? <PrivateEntry expired={expired} /> : library && session.user ? <LibraryController key={session.user.username} user={session.user} legacyCount={session.legacyImportCount} onSession={setSession} onAuthLost={authLost} onOpenBook={openBook} restorePosition={shelfReturn} /> : <Studio key={`${session.user?.username || 'guest'}:${route}`} user={session.user} onAuthLost={authLost} initialJob={openedBook} bookArrival={bookArrival} />}
   </>;
 }
 

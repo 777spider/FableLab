@@ -16,7 +16,7 @@ The end-to-end checks used a fresh temporary data directory with real model acce
 
 ## Bookshelf update — 2026-10-27
 
-The two built-in cases remain visible during loading and errors and are not inserted into account data. Tests check stable preset links, the education case's seven-page paragraph coverage and its quotation anchors. A mock browser review checked the 300 ms opening transition, Enter, modified clicks and new tabs, duplicate clicks, Back, reduced motion, animation fallbacks, dates and 390 px overflow. It made no API writes or model calls. Actual browser Back was checked; persisted lifecycle resets were simulated rather than claimed as a real bfcache hit.
+The two built-in cases remain visible during loading and errors and are not inserted into account data. Tests check stable preset links, the education case's seven-page paragraph coverage and its quotation anchors. Mock browser reviews checked Enter, modified clicks and new tabs, duplicate clicks, Back, reduced motion, animation fallbacks and 390 px overflow. The revised opening uses a 170 ms lift/cover turn followed by a 330 ms native View Transition into the reader, with same-page fallback. Its real paired snapshot readiness, URL-only history, focus, lower-row opening, return scroll restoration and private-job revalidation failure were checked. Cover dates occur once, and valid 40-character Chinese/English titles fit at 14 px or larger after font loading and resize. No API writes or model calls were made. Actual browser Back was checked; persisted lifecycle resets were simulated rather than claimed as a real bfcache hit.
 
 ## Hosted CI status
 

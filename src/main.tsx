@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import type { JobDTO, LearningFormat, SessionResponse, ShareDTO, SharedModuleDTO, TaskDTO, UserDTO } from '../shared/contracts';
 import { api, ApiError, upsert } from './api';
-import { AccountPage, authURL, type AuthFields, type AuthView, LibraryView, RecoveryPage, safeReturnTo, SharePanel, UnavailablePage } from './account-views';
-import { preset } from './preset';
+import { AccountPage, authURL, bookCreationDate, type AuthFields, type AuthView, LibraryView, RecoveryPage, safeReturnTo, SharePanel, UnavailablePage } from './account-views';
+import { libraryPresets, preset, presetForDemo } from './preset';
 import { forestArt, presetArtSize } from './art';
 import './styles.css';
 import './account.css';
@@ -27,7 +27,7 @@ function clearPrivateStorage() {
 try { localStorage.removeItem('fable-studio:current-job'); localStorage.removeItem('fable-studio:pending-request'); } catch { /* Optional storage. */ }
 const modeFromURL = (): LearningFormat => new URLSearchParams(location.search).get('mode') === 'comic' ? 'comic' : 'text';
 const active = (job: JobDTO) => job.status === 'queued' || job.status === 'running';
-const isDemo = (job: JobDTO) => job.id === preset.id;
+const isDemo = (job: JobDTO) => libraryPresets.some(item => item.id === job.id);
 const label = (job: JobDTO) => job.status === 'paused' ? '已暂停' : job.status === 'failed' ? '等待继续' : active(job) ? '正在生成' : '可阅读';
 const publicMessage = (error: unknown) => error instanceof ApiError ? error.message : '连接暂时中断。已保存的故事还在，可以重试。';
 const authRequired = (error: unknown) => error instanceof ApiError && error.status === 401 && error.code !== 'ACCESS_CODE_REQUIRED';
@@ -61,8 +61,8 @@ function Home() {
   </main>;
 }
 
-function FormatSwitch({ format, onChange, disabled = false }: { format: LearningFormat; onChange: (f: LearningFormat) => void; disabled?: boolean }) {
-  return <div className="format-switch" role="group" aria-label="阅读方式">{(['text', 'comic'] as const).map(f => <button key={f} type="button" aria-pressed={format === f} disabled={disabled} onClick={() => onChange(f)}>{f === 'text' ? '文字' : '漫画'}</button>)}</div>;
+function FormatSwitch({ format, onChange, disabled = false, comicDisabled = false }: { format: LearningFormat; onChange: (f: LearningFormat) => void; disabled?: boolean; comicDisabled?: boolean }) {
+  return <div className="format-switch" role="group" aria-label="阅读方式">{(['text', 'comic'] as const).map(f => <button key={f} type="button" aria-pressed={format === f} disabled={disabled || (f === 'comic' && comicDisabled)} title={f === 'comic' && comicDisabled ? '此示例为文字读本' : undefined} onClick={() => onChange(f)}>{f === 'text' ? '文字' : '漫画'}</button>)}</div>;
 }
 
 function Progress({ job, busy, offline, onAction }: { job: JobDTO; busy: boolean; offline: boolean; onAction: (a: 'pause' | 'resume') => void }) {
@@ -97,7 +97,9 @@ function Question({ task }: { task: TaskDTO }) {
   return <section className="question"><h3>{task.kind === 'comparison' ? '把两个故事放在一起' : task.kind === 'comprehension' ? '回到故事里' : '换一个情境'}</h3><Prose text={task.prompt} /><div className="answer-options">{task.options.map((option, index) => <button type="button" key={option.id} aria-pressed={answer === option.id} onClick={() => setAnswer(option.id)}><span>{String.fromCharCode(65 + index)}</span>{option.text}</button>)}</div>{answer && <div className="answer-feedback" role="status"><strong>{answer === task.correctAnswer ? '这个判断有依据。' : '再看看其中的关系。'}</strong><Prose text={task.explanation} /></div>}</section>;
 }
 
-function Reader({ job, format, busy = false, onFormat, onAction, readOnly = false, storageScope = 'preset', shareControl }: { job: JobDTO; format: LearningFormat; busy?: boolean; onFormat: (f: LearningFormat) => void; onAction?: (a: 'pause' | 'resume') => void; readOnly?: boolean; storageScope?: string; shareControl?: React.ReactNode }) {
+function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction, readOnly = false, storageScope = 'preset', shareControl }: { job: JobDTO; format: LearningFormat; busy?: boolean; onFormat: (f: LearningFormat) => void; onAction?: (a: 'pause' | 'resume') => void; readOnly?: boolean; storageScope?: string; shareControl?: React.ReactNode }) {
+  const comicAvailable = !isDemo(job) || job.stories.some(story => story.pages.some(page => page.image.status === 'ready' && page.image.url));
+  const format = comicAvailable ? requestedFormat : 'text';
   const storageKey = `fable-studio:page:${storageScope}:${job.id}`;
   const [position, setPosition] = useState(() => readStorage(storageKey));
   const [failed, setFailed] = useState<Record<string, boolean>>({});
@@ -136,7 +138,7 @@ function Reader({ job, format, busy = false, onFormat, onAction, readOnly = fals
   }, [index, canNext, pages.length]);
   if (pages.length === 0) return <section className="reader-loading"><span className="loading-line" /><span className="loading-line" /><span className="loading-line" /><h2>故事正在成篇。</h2><p>写好的内容会先出现在这里。</p></section>;
   return <section className={`reader reader-${format}`} aria-label="阅读故事">
-    <header className="reader-top"><span>{job.concept}{job.provenance === 'preset' && <span className="preset-note">预置示例</span>}</span><div className="reader-tools"><FormatSwitch format={format} onChange={onFormat} disabled={busy} />{shareControl}</div></header>
+    <header className="reader-top"><span>{job.concept}{job.provenance === 'preset' && <span className="preset-note">预置示例</span>}</span><div className="reader-tools"><FormatSwitch format={format} onChange={onFormat} disabled={busy} comicDisabled={!comicAvailable} />{shareControl}</div></header>
     {job.provenance !== 'preset' && <p className={`quality-note ${job.quality === 'needs_review' ? 'needs-review' : ''}`} role="status">{job.quality === 'pending' ? '初稿可读，学理复核中' : job.quality === 'needs_review' ? '这份内容仍需复核，请结合教材与原始文献核对。' : '机器初检完成，学术来源待核验'}</p>}
     <nav className="story-tabs" aria-label="故事与学理">{job.stories.map((story, i) => <button type="button" key={story.id} disabled={!story.pages.length} aria-current={shown && shown.si === i ? 'page' : undefined} onClick={() => story.pages[0] && choose(`${story.id}/${story.pages[0].id}`)}>{job.stories.length > 1 && <span>{String(i + 1).padStart(2, '0')}</span>}{story.title}</button>)}<div className="notes-tabs"><button type="button" disabled={!job.lesson} aria-current={isLesson ? 'page' : undefined} onClick={() => choose('lesson')} title="学术解析">解</button><button type="button" disabled={!job.lesson} aria-current={index === pages.length + 1 ? 'page' : undefined} onClick={() => choose('discussion')} title="讨论与应用">议</button></div></nav>
     <div className="reading-scroll" ref={scroll} tabIndex={0} aria-label="当前页内容">
@@ -214,7 +216,7 @@ function Studio({ user, onAuthLost }: { user: UserDTO | null; onAuthLost: () => 
   const [concept, setConcept] = useState(() => readPending(username)?.concept || readSession(draftKey(username)) || readSession(draftKey('guest')));
   const [format, setFormat] = useState<LearningFormat>(modeFromURL);
   const [jobs, setJobs] = useState<JobDTO[]>([]);
-  const [job, setJob] = useState<JobDTO | null>(() => params.get('demo') === '1' ? { ...preset, format: modeFromURL() } : null);
+  const [job, setJob] = useState<JobDTO | null>(() => { const example = presetForDemo(params.get('demo')); return example ? { ...example, format: modeFromURL() } : null; });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
@@ -262,7 +264,7 @@ function Studio({ user, onAuthLost }: { user: UserDTO | null; onAuthLost: () => 
   function lostAuth() { ++pollGeneration.current; selectedJob.current = ''; setJob(null); setJobs([]); setShare(null); setSharing(false); onAuthLost(); }
   function updateURL(next: JobDTO) {
     const url = new URL(location.href); url.searchParams.set('mode', next.format);
-    if (isDemo(next)) { url.searchParams.delete('job'); url.searchParams.set('demo', '1'); }
+    if (isDemo(next)) { url.searchParams.delete('job'); url.searchParams.set('demo', next.id === preset.id ? '1' : 'education-xai'); }
     else { url.searchParams.delete('demo'); url.searchParams.set('job', next.id); }
     history.replaceState(null, '', url);
   }
@@ -340,7 +342,7 @@ function Studio({ user, onAuthLost }: { user: UserDTO | null; onAuthLost: () => 
     });
   }
   const performAction = (action: 'pause' | 'resume') => { if (job && user) void mutate(async () => { const result = await api.action(job.id, action); accept(result.job); setRefreshKey(key => key + 1); }); };
-  const openJob = (item: JobDTO) => { if (busy || shareBusy || item.id === job?.id) return; void mutate(async () => { const result = await api.job(item.id); accept(result.job); }); };
+  const openJob = (item: JobDTO) => { if (busy || shareBusy || item.id === job?.id) return; if (isDemo(item)) { accept(item); return; } void mutate(async () => { const result = await api.job(item.id); accept(result.job); }); };
   async function changeSharing(action: 'publish' | 'revoke') {
     if (shareMutation.current || !shareKnown || !job || isDemo(job) || !user) return;
     const id = job.id; shareMutation.current = true; setShareBusy(true); setShareError(''); setShareNotice('');
@@ -359,7 +361,7 @@ function Studio({ user, onAuthLost }: { user: UserDTO | null; onAuthLost: () => 
       {job && <Progress job={job} busy={busy} offline={offline} onAction={performAction} />}
       {offline && !job && <p className="form-error" role="status">当前离线。恢复连接后可以继续生成。</p>}
       {error && <div className="workspace-error" role="alert"><p>{error}</p><button type="button" onClick={() => setError('')}>收起</button></div>}
-      {user ? <section className="bookshelf"><div className="shelf-heading"><h2><a href="/learn/library">我的书架 <Arrow /></a></h2><span>{jobs.length}</span></div>{jobs.length === 0 ? <p className="shelf-empty">你的第一本，<br />从一个好奇的问题开始。</p> : <div className="shelf-list">{jobs.slice(0, 5).map((item, i) => <button type="button" key={item.id} className={`shelf-item ${job?.id === item.id ? 'selected' : ''}`} disabled={busy || shareBusy} onClick={() => openJob(item)}><span className="shelf-index">{String(i + 1).padStart(2, '0')}</span><span><strong>{item.stories[0]?.title || item.concept}</strong><small>{label(item)}</small></span><span aria-hidden="true">↗</span></button>)}</div>}</section> : <p className="guest-compose-note"><a href={authURL('register')}>创建自己的书架</a>，故事下次接着读。</p>}
+      {user ? <section className="bookshelf"><div className="shelf-heading"><h2><a href="/learn/library">我的书架 <Arrow /></a></h2><span>{jobs.length + libraryPresets.length}</span></div><div className="shelf-list">{[...libraryPresets, ...jobs.filter(item => !isDemo(item))].slice(0, 5).map((item, i) => <button type="button" key={item.id} className={`shelf-item ${job?.id === item.id ? 'selected' : ''}`} disabled={busy || shareBusy} onClick={() => openJob(item)}><span className="shelf-index">{String(i + 1).padStart(2, '0')}</span><span><strong>{item.stories[0]?.title || item.concept}</strong><small>{bookCreationDate(item.createdAt)}{item.format === 'comic' ? ' 作画' : ' 写下'}{item.status !== 'completed' && ` · ${label(item)}`}</small></span><span aria-hidden="true">↗</span></button>)}</div></section> : <p className="guest-compose-note"><a href={authURL('register')}>创建自己的书架</a>，故事下次接着读。</p>}
       <button type="button" className="workspace-demo" onClick={() => accept({ ...preset, format })} disabled={busy || shareBusy}>预置示例《雾港渡船》 <Arrow /></button>
     </aside>
     {job ? <Collapsible.Root open={sharing} onOpenChange={changeShareOpen} asChild><div className={`reading-workspace ${sharing ? 'with-share' : ''}`}><Reader key={job.id} job={job} format={format} busy={busy} onFormat={changeFormat} onAction={performAction} storageScope={isDemo(job) ? 'preset' : username} shareControl={user && !isDemo(job) ? <Collapsible.Trigger asChild><button ref={shareTrigger} type="button" className="reader-share-button" disabled={shareBusy}>分享</button></Collapsible.Trigger> : undefined} /><Collapsible.Content ref={shareContent} className="share-disclosure"><SharePanel job={job} share={share} known={shareKnown} loading={shareLoading || (!shareKnown && !shareError)} busy={shareBusy} error={shareError} notice={shareNotice} onCreate={() => void changeSharing('publish')} onRevoke={() => void changeSharing('revoke')} onReload={() => { setShareError(''); setShareKnown(false); setShareRefresh(value => value + 1); }} onClose={() => changeShareOpen(false)} /></Collapsible.Content></div></Collapsible.Root> : <div className="reading-workspace"><Welcome format={format} onDemo={() => accept({ ...preset, format })} /></div>}

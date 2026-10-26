@@ -26,6 +26,8 @@ A self-hostable, Chinese-first learning app that turns a difficult concept into 
 
 FableLab also includes a private bookshelf, account recovery codes, and read-only snapshot links you can revoke. Generation checkpoints persist across refreshes and server restarts; bounded retries continue unfinished stages and missing illustrations.
 
+Every bookshelf includes two ready-to-read examples: *Fog Harbor Ferry* (simulation, illustrated) and *The Last Slip of Paper* (explainable AI in education, text). Opening a book gives it a brief lift and cover turn; reduced-motion preferences keep navigation immediate. Creation dates appear beneath each book.
+
 This is a learning app prototype. Its educational effects have not been formally evaluated. Generated references remain marked unverified, and machine review does not replace subject-matter review.
 
 [Validation record](docs/VALIDATION.md): local tests, build and mock flows passed. Hosted GitHub Actions also passed installation, tests and the production build.

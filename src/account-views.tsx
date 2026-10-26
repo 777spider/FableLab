@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { JobDTO, ShareDTO } from '../shared/contracts';
 import { forestArt, lighthouseArt } from './art';
+import { libraryPresets, presetURL } from './preset';
 
 export type AuthView = 'login' | 'register' | 'recover';
 export type AuthFields = { username: string; password: string; invitationCode: string; recoveryCode: string };
@@ -82,24 +83,74 @@ function currentStatus(job: JobDTO) {
   return '';
 }
 
+export function bookCreationDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('.');
+}
+
 export function LibraryView({ jobs, loading, error, legacyCount, importing, onImport, onRetry }: {
   jobs: JobDTO[]; loading: boolean; error: string; legacyCount: number; importing: boolean;
   onImport: () => void; onRetry: () => void;
 }) {
-  return <main id="main" className="library-page"><div className="library-heading"><h1>我的书架<span>{loading ? '' : jobs.length}</span></h1><a className="button primary" href="/learn">新故事 <Arrow /></a></div>
+  const books = [...libraryPresets, ...jobs.filter(job => !libraryPresets.some(example => example.id === job.id))];
+  const [openingId, setOpeningId] = useState('');
+  const opening = useRef<{ animations: Animation[]; timer: number; navigating: boolean } | null>(null);
+  useEffect(() => {
+    const cancel = () => {
+      const pending = opening.current; opening.current = null;
+      if (pending) { window.clearTimeout(pending.timer); pending.animations.forEach(animation => animation.cancel()); }
+    };
+    const reset = () => { cancel(); setOpeningId(''); };
+    window.addEventListener('pageshow', reset); window.addEventListener('pagehide', reset);
+    return () => { window.removeEventListener('pageshow', reset); window.removeEventListener('pagehide', reset); cancel(); };
+  }, []);
+  function openBook(event: React.MouseEvent<HTMLAnchorElement>, id: string) {
+    const link = event.currentTarget;
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.hasAttribute('download') || (link.target && link.target !== '_self')) return;
+    if (opening.current) { event.preventDefault(); return; }
+    if (!window.matchMedia || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const cover = link.querySelector<HTMLElement>('.book-cover');
+    const face = link.querySelector<HTMLElement>('.book-cover-face');
+    if (!cover?.animate || !face?.animate) return;
+    const animations: Animation[] = [];
+    try {
+      const timing: KeyframeAnimationOptions = { duration: 300, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'forwards' };
+      animations.push(cover.animate([{ transform: getComputedStyle(cover).transform }, { transform: 'translateY(-9px) rotate(-.8deg)', offset: .35 }, { transform: 'translateY(-9px) rotate(-.8deg)' }], timing));
+      const turn = face.animate([{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(0deg)', offset: .3 }, { transform: 'rotateY(-38deg)' }], timing);
+      animations.push(turn);
+      const href = link.href;
+      const pending = { animations, timer: 0, navigating: false };
+      const navigate = () => {
+        if (opening.current !== pending || pending.navigating) return;
+        pending.navigating = true; window.clearTimeout(pending.timer);
+        location.assign(href);
+      };
+      pending.timer = window.setTimeout(navigate, 360);
+      opening.current = pending;
+      turn.finished.then(navigate, navigate);
+      setOpeningId(id); event.preventDefault();
+    } catch {
+      if (opening.current?.animations === animations) { window.clearTimeout(opening.current.timer); opening.current = null; }
+      animations.forEach(animation => animation.cancel());
+      // Keep the link's native navigation if animation setup is unavailable.
+    }
+  }
+  return <main id="main" className="library-page"><div className="library-heading"><h1>我的书架<span>{books.length}</span></h1><a className="button primary" href="/learn">新故事 <Arrow /></a></div>
     {legacyCount > 0 && <section className="legacy-import"><p>这台浏览器里，还有{legacyCount}份以前的阅读记录。</p><button type="button" disabled={importing} onClick={onImport}>{importing ? '正在导入…' : '导入本机记录'} <Arrow /></button></section>}
     {error && <div className="library-error" role="alert"><p>{error}</p><button type="button" onClick={onRetry}>重新连接</button></div>}
-    {loading ? <div className="book-grid book-grid-loading" aria-label="正在加载书架" aria-busy="true">{[0, 1, 2].map(n => <div className="book-placeholder" key={n}><div /><span /></div>)}</div> : jobs.length === 0 ? <div className="empty-library"><figure><img {...forestArt} alt="森林里，动物们正围坐着观察彼此。" /></figure><div><h2>书架还空着，<br />好奇心已经到了。</h2><a href="/learn">从一个概念开始 <Arrow /></a><a className="empty-demo" href="/learn?demo=1">或先翻翻《雾港渡船》</a></div></div> : <div className="book-grid">{jobs.map((job, index) => <LibraryBook key={job.id} job={job} index={index} />)}</div>}
+    {books.length > 0 ? <div className="book-grid" aria-busy={loading || undefined}>{books.map((job, index) => <LibraryBook key={job.id} job={job} index={index} opening={openingId === job.id} onOpen={openBook} />)}</div> : loading ? <div className="book-grid book-grid-loading" aria-label="正在加载书架" aria-busy="true">{[0, 1, 2].map(n => <div className="book-placeholder" key={n}><div /><span /></div>)}</div> : <div className="empty-library"><figure><img {...forestArt} alt="森林里，动物们正围坐着观察彼此。" /></figure><div><h2>书架还空着，<br />好奇心已经到了。</h2><a href="/learn">从一个概念开始 <Arrow /></a><a className="empty-demo" href="/learn?demo=1">或先翻翻《雾港渡船》</a></div></div>}
   </main>;
 }
 
-function LibraryBook({ job, index }: { job: JobDTO; index: number }) {
+function LibraryBook({ job, index, opening, onOpen }: { job: JobDTO; index: number; opening: boolean; onOpen: (event: React.MouseEvent<HTMLAnchorElement>, id: string) => void }) {
   const [failedCover, setFailedCover] = useState(false);
   const cover = !failedCover && job.stories.flatMap(s => s.pages).find(p => p.image.status === 'ready' && p.image.url)?.image.url;
   const title = job.stories[0]?.title || job.concept;
   const status = currentStatus(job);
   const shape = ['tall', 'compact', 'medium'][index % 3];
-  return <a className={`library-book book-${shape} ${cover ? 'has-cover' : ''}`} href={`/learn?${new URLSearchParams({ job: job.id, mode: job.format })}`}><div className="book-cover">{cover ? <img src={cover} alt="" loading="lazy" onError={() => setFailedCover(true)} /> : <div className="type-cover"><span>fablelab.</span><strong>{title}</strong><i aria-hidden="true">◇</i></div>}<span className="book-open" aria-hidden="true">翻开 ↗</span></div><div className="book-details"><h2>{title}</h2><p>{job.concept}{status && <span>{status}</span>}</p></div></a>;
+  const date = bookCreationDate(job.createdAt);
+  const href = job.provenance === 'preset' ? presetURL(job) : `/learn?${new URLSearchParams({ job: job.id, mode: job.format })}`;
+  return <a className={`library-book book-${shape} ${cover ? 'has-cover' : ''} ${opening ? 'is-opening' : ''}`} href={href} onClick={event => onOpen(event, job.id)}><div className="book-cover"><div className="book-pages" aria-hidden="true" /><div className="book-cover-face">{cover ? <img src={cover} alt="" loading="lazy" onError={() => setFailedCover(true)} /> : <div className="type-cover"><span>fablelab.</span><strong>{title}</strong><i aria-hidden="true">◇</i></div>}<span className="book-open" aria-hidden="true">翻开 ↗</span></div></div><div className="book-details"><h2>{title}</h2><p>{job.concept}{status && <span>{status}</span>}</p>{date && <time dateTime={job.createdAt}>{date} {job.format === 'comic' ? '作画' : '写下'}</time>}</div></a>;
 }
 
 export function SharePanel({ job, share, known, loading, busy, error, notice, onCreate, onRevoke, onReload, onClose }: {

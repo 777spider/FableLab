@@ -1,11 +1,11 @@
 # Public preview validation
 
-Checked locally on 2026-10-26 with Node.js 24.19.0 and npm 11.17.0. Application source corresponds to commit `407d5d2f303dfaec624e4ed4da9edcc2f65aacca`; subsequent publication updates change documentation only.
+Initial preview checked locally on 2026-10-26 with Node.js 24.19.0 and npm 11.17.0. The bookshelf update below was checked on 2026-10-27.
 
 | Check | Result |
 | --- | --- |
 | Clean installation | `npm ci` passed with dependencies from the official npm registry. |
-| Automated tests | `npm test`: 53 passed, 0 failed. |
+| Automated tests | `npm test`: 55 passed, 0 failed (2026-10-27). |
 | Production build | `npm run build`: TypeScript and Vite passed. |
 | Runtime dependency audit | `npm audit --omit=dev --registry=https://registry.npmjs.org`: 0 reported vulnerabilities at the time of checking. |
 | Synthetic end-to-end flow | Registration, single-story text generation, comic placeholders, private ownership, account recovery, sharing and revocation passed. Sessions, bookshelf records and media survived a service restart. |
@@ -13,6 +13,10 @@ Checked locally on 2026-10-26 with Node.js 24.19.0 and npm 11.17.0. Application 
 | Release hygiene | Reviewed the complete staged snapshot for credentials and private data. No production database, logs, browser state, real learner records or credentials are included. |
 
 The end-to-end checks used a fresh temporary data directory with real model access disabled and server-side network access blocked. They do **not** establish current ECNU service availability or the accuracy of AI-generated teaching materials. The mock comic uses placeholder images; the bundled preset uses cached artwork.
+
+## Bookshelf update — 2026-10-27
+
+The two built-in cases remain visible during loading and errors and are not inserted into account data. Tests check stable preset links, the education case's seven-page paragraph coverage and its quotation anchors. A mock browser review checked the 300 ms opening transition, Enter, modified clicks and new tabs, duplicate clicks, Back, reduced motion, animation fallbacks, dates and 390 px overflow. It made no API writes or model calls. Actual browser Back was checked; persisted lifecycle resets were simulated rather than claimed as a real bfcache hit.
 
 ## Hosted CI status
 

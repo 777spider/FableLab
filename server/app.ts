@@ -147,8 +147,9 @@ export function createApp(service: JobService, config: AppConfig, {auth, shares}
     res.json({jobs});
   });
   app.post('/learn/api/jobs', (req, res) => {
-    const input = z.strictObject({concept: z.string().trim().min(1).max(120), format: z.enum(['text', 'comic']), clientRequestId: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/)}).safeParse(req.body);
+    const input = z.strictObject({concept: z.string().trim().min(1).max(120), format: z.enum(['text', 'comic']), storyLength: z.enum(['standard', 'long']).optional(), clientRequestId: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/)}).safeParse(req.body);
     if (!input.success) return void fail(res, 400, 'INVALID_INPUT', '请填写1–120字的学术概念并选择阅读形式。');
+    if (input.data.storyLength === 'long' && input.data.format !== 'text') return void fail(res, 400, 'LONG_TEXT_ONLY', '长篇故事目前支持文字阅读，请选择文字。');
     const account = res.locals.account as AccountIdentity;
     if (!rate('create:' + account.id, 12, 3600000)) return void fail(res, 429, 'CREATE_RATE_LIMIT', '创建次数较多，请稍后再试。');
     res.status(202).json({job: service.create(account.owner, input.data)});
@@ -199,7 +200,8 @@ export function createApp(service: JobService, config: AppConfig, {auth, shares}
   });
   app.use('/learn', express.static(config.distDir, {index: false, maxAge: config.production ? '1h' : 0,
     setHeaders(res, file) {
-      if (config.production && dirname(file) === join(config.distDir, 'art', 'optimized') && /^[a-f0-9]{64}\.webp$/.test(basename(file))) {
+      const fontDirectory = join(config.distDir, 'fonts', 'lxgw-wenkai-screen-v1.7.0');
+      if (config.production && (dirname(file) === join(config.distDir, 'art', 'optimized') && /^[a-f0-9]{64}\.webp$/.test(basename(file)) || dirname(file) === fontDirectory && /^[a-f0-9]{64}\.woff2$/.test(basename(file)))) {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       }
     },
@@ -214,7 +216,7 @@ export function createApp(service: JobService, config: AppConfig, {auth, shares}
     if (error instanceof ShareError) return void fail(res, error.code === 'NOT_SHAREABLE' ? 400 : 500, error.code, error.code === 'NOT_SHAREABLE' ? '故事完成并通过机器初检后才能分享。' : '分享暂时未能完成，请稍后再试。');
     if (error instanceof GenerationError) {
       const status = error.code === 'JOB_NOT_FOUND' ? 404 : error.code === 'REQUEST_CONFLICT' ? 409 : error.code === 'TOO_MANY_JOBS' ? 429 : 400;
-      return void fail(res, status, error.code, status === 404 ? '没有找到这份内容。' : status === 409 ? '这次请求已存在，请刷新后继续。' : '暂时无法完成操作，请稍后再试。');
+      return void fail(res, status, error.code, error.code === 'LONG_TEXT_ONLY' ? '长篇故事目前支持文字阅读，请选择文字。' : status === 404 ? '没有找到这份内容。' : status === 409 ? '这次请求已存在，请刷新后继续。' : '暂时无法完成操作，请稍后再试。');
     }
     if (error instanceof SyntaxError || (error as {type?: string})?.type === 'entity.too.large') return void fail(res, 400, 'INVALID_JSON', '请求内容格式不正确。');
     fail(res, 500, 'INTERNAL_ERROR', '服务暂时未能完成操作，请稍后再试。');

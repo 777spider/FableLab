@@ -1,19 +1,25 @@
 import {z} from 'zod';
-import type {KnowledgeDTO,LessonDTO,StoryDTO,TaskDTO,DiscussionDTO} from '../shared/contracts.ts';
+import type {KnowledgeDTO,LessonDTO,StoryDTO,StoryLength,TaskDTO,DiscussionDTO} from '../shared/contracts.ts';
 export class GenerationError extends Error {constructor(public code:string,public transient=false){super(code);}}
 export class CandidateError extends GenerationError {constructor(public candidate:unknown,public details:string[]){super('CONTENT_INVALID');}}
 export class ReviewOutputError extends CandidateError {constructor(candidate:unknown,details:string[]){super(candidate,details);this.code='REVIEW_OUTPUT_INVALID';}}
 const text=z.string().trim().min(2).max(6000);
 export const knowledgeSchema=z.object({concept:z.string().trim().min(1).max(120),definition:text,coreRelations:z.array(text).min(2).max(4),prerequisites:z.array(text).max(6),misconceptions:z.array(text).min(1).max(6),academicUse:text,searchTerms:z.array(text).max(6),sources:z.array(z.object({title:text,authors:text,year:z.string().max(20),url:z.url().optional(),verificationStatus:z.literal('unverified')})).max(4)});
 export const storySchema=z.object({id:z.string(),title:z.string().trim().min(2).max(40),sourceDomain:text,characters:z.array(z.object({name:z.string().min(1).max(24),visualDesign:z.string().min(5).max(160)})).min(1).max(4),paragraphs:z.array(z.object({id:z.string().regex(/^p\d+$/),text:z.string().trim().min(2).max(1600)})).min(6).max(40),pages:z.array(z.object({title:z.string().min(1).max(24),paragraphIds:z.array(z.string()).min(1),imagePrompt:z.string().min(10).max(350),activeCharacters:z.array(z.string()).max(4)})).min(4).max(6)});
+// Long output owns its prose within scenes. Cross-array IDs are assigned locally.
+const longSceneTitle=storySchema.shape.pages.element.shape.title.trim().regex(/^(?!(?:解|议|概念解析|概念揭示|概念解释|概念定义|正式定义|学术解释|学理解析|课后讨论|思考与讨论|练习与讨论)$)[\s\S]+$/,'Scene titles must describe the story, not the later explanation or discussion stage.');
+export const longStorySchema=storySchema.omit({paragraphs:true,pages:true}).extend({scenes:z.array(z.strictObject({title:longSceneTitle,paragraphs:z.array(storySchema.shape.paragraphs.element.shape.text).min(2).max(4)})).min(8).max(16)}).strict();
+const canonicalLongStorySchema=storySchema.extend({paragraphs:z.array(storySchema.shape.paragraphs.element).min(16).max(64),pages:z.array(storySchema.shape.pages.element.extend({imagePrompt:z.string().max(350)})).min(8).max(16)});
+export const storySchemaFor=(length:StoryLength='standard')=>length==='long'?longStorySchema:storySchema;
 export const lessonSchema=z.object({lesson:z.object({definition:text,principles:z.array(text).min(2).max(6),academicExplanation:text,mapping:z.array(z.object({storyId:z.string(),paragraphId:z.string(),quote:z.string().min(2).max(1000),relation:text,explanation:text})).min(2).max(12),boundaries:z.array(text).min(2).max(6),workedExample:text}),tasks:z.array(z.object({id:z.string(),kind:z.enum(['comprehension','comparison','application']),prompt:text,options:z.array(z.object({id:z.string(),text})).length(4),correctAnswer:z.string(),explanation:text})).length(2),discussion:z.array(z.object({prompt:text,guidance:text})).min(1).max(3)});
 export const reviewSchema=z.object({passed:z.boolean(),issues:z.array(z.object({target:z.enum(['knowledge','story-1','story-2','lesson']),detail:z.string().min(2).max(1200),evidence:z.object({paragraphId:z.string().nullable(),quote:z.string().min(2).max(400)})})).max(10)});
 export type StoryWire=z.infer<typeof storySchema>;
+export type LongStoryCandidate=z.infer<typeof longStorySchema>;
 export type LessonWire={lesson:LessonDTO;tasks:TaskDTO[];discussion:DiscussionDTO[]};
 export type Review=z.infer<typeof reviewSchema>;
-export type GenerationInput={concept:string;knowledge:KnowledgeDTO|null;stories:StoryDTO[];storyCount?:1|2;storyIndex?:number;lesson?:LessonWire|null;issues?:Review['issues'];previousCandidate?:unknown;validationErrors?:string[]};
+export type GenerationInput={concept:string;knowledge:KnowledgeDTO|null;stories:StoryDTO[];storyCount?:1|2;storyLength?:StoryLength;storyIndex?:number;lesson?:LessonWire|null;issues?:Review['issues'];previousCandidate?:unknown;validationErrors?:string[]};
 /** A fresh audit cannot inherit an earlier verdict or rejected candidate. */
-export function freshReviewInput(input:GenerationInput):GenerationInput{return structuredClone({concept:input.concept,knowledge:input.knowledge,stories:input.stories,storyCount:input.storyCount??(input.stories.length===1?1:2),lesson:input.lesson});}
+export function freshReviewInput(input:GenerationInput):GenerationInput{return structuredClone({concept:input.concept,knowledge:input.knowledge,stories:input.stories,storyCount:input.storyCount??(input.stories.length===1?1:2),storyLength:input.storyLength??'standard',lesson:input.lesson});}
 export function validateReview(candidate:unknown,input:GenerationInput):Review{
  const parsed=reviewSchema.safeParse(candidate);if(!parsed.success)throw new ReviewOutputError(candidate,parsed.error.issues.map(i=>i.path.join('.')+':'+i.code));
  const review=parsed.data,errors:string[]=[];
@@ -37,10 +43,18 @@ export interface GenerationProvider {
 }
 export function parse<T>(schema:z.ZodType<T>,candidate:unknown):T {const result=schema.safeParse(candidate);if(!result.success)throw new CandidateError(candidate,result.error.issues.map(i=>i.path.join('.')+':'+i.code));return result.data;}
 export function validateStory(candidate:unknown,input:GenerationInput):StoryWire{
- const story=parse(storySchema,candidate),errors:string[]=[];
+ if(input.storyLength!=='long')return validateCanonicalStory(candidate,input);
+ const raw=parse(longStorySchema,candidate),paragraphs:StoryWire['paragraphs']=[];
+ const pages=raw.scenes.map(scene=>{const paragraphIds=scene.paragraphs.map(text=>{const id='p'+(paragraphs.length+1);paragraphs.push({id,text});return id;});return {title:scene.title,paragraphIds,imagePrompt:'',activeCharacters:[]};});
+ return validateCanonicalStory({id:raw.id,title:raw.title,sourceDomain:raw.sourceDomain,characters:raw.characters,paragraphs,pages},input,candidate);
+}
+/** Internal persisted representation; upstream long completions must use raw scenes. */
+export function validateCanonicalStory(candidate:unknown,input:GenerationInput,rejectedCandidate:unknown=candidate):StoryWire{
+ const story=parse(input.storyLength==='long'?canonicalLongStorySchema:storySchema,candidate),errors:string[]=[];
  const ids=story.paragraphs.map(p=>p.id),refs=story.pages.flatMap(p=>p.paragraphIds);
  const prose=story.paragraphs.map(p=>p.text).join('\n\n').trim();
- if(prose.length<800||prose.length>6000)errors.push(`story length ${prose.length}; required 800–6000, aim 1400–2400 with actual events`);
+ const long=input.storyLength==='long',min=long?2400:800,max=long?8000:6000;
+ if(prose.length<min||prose.length>max)errors.push(`story length ${prose.length}; required ${min}–${max}, aim ${long?'3200–5600':'1400–2400'} with actual events`);
  if(new Set(ids).size!==ids.length||JSON.stringify(ids)!==JSON.stringify(refs))errors.push('pages must cover all paragraphs exactly once in authored order');
  if(input.knowledge?.concept&&prose.includes(input.knowledge.concept))errors.push('formal concept name must stay in the later lesson, including the ending');
  if(/\bp\d+\b/i.test(prose))errors.push('paragraph IDs are metadata and must not appear in story prose');
@@ -48,7 +62,7 @@ export function validateStory(candidate:unknown,input:GenerationInput):StoryWire
  for(const page of story.pages)if(page.activeCharacters.some(n=>!names.has(n)))errors.push('active character must use fixed character name');
  if(input.stories.some(s=>s.id!==story.id&&s.sourceDomain===story.sourceDomain))errors.push('second story requires a different source domain');
  if(story.id!=='story-'+((input.storyIndex??0)+1))errors.push('story id must equal assigned index');
- if(errors.length)throw new CandidateError(candidate,errors);return story;
+ if(errors.length)throw new CandidateError(rejectedCandidate,errors);return story;
 }
 export function validateLesson(candidate:unknown,input:GenerationInput):LessonWire{
  const value=parse(lessonSchema,candidate),errors:string[]=[],storyCount=input.storyCount??input.stories.length;

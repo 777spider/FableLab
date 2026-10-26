@@ -26,7 +26,9 @@ A self-hostable, Chinese-first learning app that turns a difficult concept into 
 
 FableLab also includes a private bookshelf, account recovery codes, and read-only snapshot links you can revoke. Generation checkpoints persist across refreshes and server restarts; bounded retries continue unfinished stages and missing illustrations.
 
-Every bookshelf includes two ready-to-read examples: *Fog Harbor Ferry* (simulation, illustrated) and *The Last Slip of Paper* (explainable AI in education, text). Opening a book gives it a brief lift and cover turn into the reader; reduced-motion preferences keep navigation immediate. Creation dates appear on the covers, and cover titles adapt to the available space.
+Text generation offers **Standard** and optional **Long**. A long story develops more actions, conflicts and consequences across **8–16 natural scenes/pages**, with the page count chosen by the model. Long stories use text and make no image requests; standard text, comics and both built-in examples remain available. See the [writing design](docs/WRITING_DESIGN.md).
+
+Every bookshelf includes two ready-to-read examples: *Fog Harbor Ferry* (simulation, illustrated) and *The Last Slip of Paper* (explainable AI in education, text). Opening a book gives it a brief lift and cover turn into the reader; reduced-motion preferences keep navigation immediate. Creation dates sit in small type at the lower left of each cover, and titles adapt to the available space. Book titles, story prose and page headings use the self-hosted **LXGW WenKai Screen** reading font; see [font sources and licenses](docs/FONTS.md).
 
 This is a learning app prototype. Its educational effects have not been formally evaluated. Generated references remain marked unverified, and machine review does not replace subject-matter review.
 
@@ -99,4 +101,4 @@ If story-first learning is useful to you, a star helps others discover FableLab.
 
 ## License
 
-[MIT](LICENSE) · Copyright © 2026 bigWhiteTofu. See [asset provenance](docs/ASSETS.md) for the bundled demo illustrations.
+[MIT](LICENSE) · Copyright © 2026 bigWhiteTofu. See [asset provenance](docs/ASSETS.md) for the demo illustrations and the bundled font's separate licenses.

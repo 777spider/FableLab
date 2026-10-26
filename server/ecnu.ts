@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {appendFileSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {z} from 'zod';
-import {GenerationError,CandidateError,knowledgeSchema,storySchema,lessonSchema,reviewSchema,freshReviewInput,type GenerationProvider,type GenerationInput,type ImageInput,type ImageResult} from './generation.ts';
+import {GenerationError,CandidateError,knowledgeSchema,storySchemaFor,lessonSchema,reviewSchema,freshReviewInput,type GenerationProvider,type GenerationInput,type ImageInput,type ImageResult} from './generation.ts';
 import {requestEcnuImage,EcnuImageError} from './ecnu-images.ts';
 import {COMMON,KNOWLEDGE,STORY,LESSON,REVIEW,PROMPT_VERSION} from './prompts.ts';
 const sha=(value:string)=>createHash('sha256').update(value).digest('hex');
@@ -43,7 +43,7 @@ export class EcnuProvider implements GenerationProvider {
   }catch(error){const failure=signal.aborted?new GenerationError('ABORTED'):timeout.aborted?new GenerationError('UPSTREAM_TIMEOUT',true):error instanceof GenerationError?error:new GenerationError('UPSTREAM_NETWORK',true);const stats=(error as {streamStats?:StreamStats})?.streamStats;this.log({...meta,status:'failed',code:failure.code,durationMs:Date.now()-started,...(stats?{wireBytes:stats.wireBytes,contentBytes:stats.contentBytes,chunks:stats.chunks,returnedModel:stats.returnedModel?.includes(this.config.apiKey)?null:stats.returnedModel}:{})});throw failure;}
  }
  knowledge(input:GenerationInput,signal:AbortSignal){return this.text('knowledge',KNOWLEDGE,{...input,stories:[]},knowledgeSchema,4000,signal);}
- story(input:GenerationInput,signal:AbortSignal){return this.text('story',STORY,{...input,lesson:null},storySchema,7000,signal);}
+ story(input:GenerationInput,signal:AbortSignal){return this.text('story',STORY,{...input,lesson:null},storySchemaFor(input.storyLength),input.storyLength==='long'?14000:7000,signal);}
  lesson(input:GenerationInput,signal:AbortSignal){return this.text('lesson',LESSON,input,lessonSchema,6500,signal);}
  review(input:GenerationInput,signal:AbortSignal){return this.text('review',REVIEW,freshReviewInput(input),reviewSchema,3000,signal);}
  async image(input:ImageInput,signal:AbortSignal):Promise<ImageResult>{

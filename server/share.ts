@@ -79,15 +79,16 @@ export class ShareService {
     };
     try {
       const snapshot: SharedModuleDTO = {
-        concept: job.concept, format: job.format, createdAt: job.createdAt,
+        concept: job.concept, format: job.storyLength === 'long' ? 'text' : job.format, createdAt: job.createdAt,
+        ...(job.storyLength === 'long' || job.storyLength === 'standard' ? {storyLength: job.storyLength} : {}),
         stories: job.stories.map(story => ({
           id: story.id, title: story.title, sourceDomain: story.sourceDomain, text: story.text,
           characters: story.characters.map(character => ({name: character.name})),
           paragraphs: story.paragraphs.map(paragraph => ({id: paragraph.id, text: paragraph.text})),
           pages: story.pages.map(page => {
-            let image: {status: 'ready' | 'failed'; url?: string} = {status: 'failed'};
+            let image: {status: 'ready' | 'failed' | 'not_requested'; url?: string} = {status: job.storyLength === 'long' ? 'not_requested' : 'failed'};
             const name = /^\/learn\/media\/([a-f0-9]{64}\.(?:png|jpg))$/.exec(page.image.url ?? '')?.[1];
-            if (page.image.status === 'ready' && name) {
+            if (job.storyLength !== 'long' && page.image.status === 'ready' && name) {
               const source = resolveMedia(name);
               if (source && existsSync(source)) {
                 const bytes = readFileSync(source);

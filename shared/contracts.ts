@@ -1,5 +1,6 @@
 /** Public contract. Private prompts, credentials and owner IDs never enter these DTOs. */
 export type LearningFormat = 'text' | 'comic';
+export type StoryLength = 'standard' | 'long';
 export type JobStatus = 'queued' | 'running' | 'paused' | 'failed' | 'completed';
 export type JobPhase = 'knowledge' | 'story-1' | 'story-2' | 'lesson' | 'review' | 'repair-story-1' | 'repair-story-2' | 'repair-lesson' | 'review-final' | 'images' | 'complete';
 export interface KnowledgeDTO {
@@ -31,6 +32,8 @@ export interface JobDTO {
   id: string; concept: string; format: LearningFormat; status: JobStatus; phase: JobPhase;
   /** New jobs have one story; absence in saved legacy records means two. */
   storyCount?: 1 | 2;
+  /** Missing in legacy records means standard; long stories support text only. */
+  storyLength?: StoryLength;
   createdAt: string; updatedAt: string;
   progress: { completedStages: string[]; stageLabel: string; elapsedMs: number; etaMs: number | null; attempts: number; attemptBudget: number; retrying?: boolean };
   knowledge: KnowledgeDTO | null; stories: StoryDTO[]; lesson: LessonDTO | null;
@@ -40,7 +43,7 @@ export interface JobDTO {
 }
 export interface ApiError { error: { code: string; message: string; recoverable?: boolean }; }
 export interface AccessResponse { unlocked: boolean; }
-export interface CreateJobRequest { concept: string; format: LearningFormat; clientRequestId: string; }
+export interface CreateJobRequest { concept: string; format: LearningFormat; clientRequestId: string; storyLength?: StoryLength; }
 export interface JobResponse { job: JobDTO; }
 export interface JobsResponse { jobs: JobDTO[]; }
 export interface UserDTO { username: string; displayName: string; }
@@ -51,6 +54,7 @@ export interface ShareResponse { share: ShareDTO | null; }
 export type SharedStoryDTO = Omit<StoryDTO, 'characters'> & { characters: { name: string }[] };
 export interface SharedModuleDTO {
   concept: string; format: LearningFormat; createdAt: string;
+  storyLength?: StoryLength;
   stories: SharedStoryDTO[]; knowledge: KnowledgeDTO | null; lesson: LessonDTO;
   tasks: TaskDTO[]; discussion: DiscussionDTO[];
   quality: 'checked'; provenance: 'generated' | 'preset';

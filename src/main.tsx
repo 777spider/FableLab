@@ -2,11 +2,12 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import * as Collapsible from '@radix-ui/react-collapsible';
-import type { JobDTO, LearningFormat, SessionResponse, ShareDTO, SharedModuleDTO, TaskDTO, UserDTO } from '../shared/contracts';
+import type { JobDTO, LearningFormat, SessionResponse, ShareDTO, SharedModuleDTO, StoryLength, TaskDTO, UserDTO } from '../shared/contracts';
 import { api, ApiError, upsert } from './api';
 import { AccountPage, authURL, bookCreationDate, type AuthFields, type AuthView, LibraryView, RecoveryPage, safeReturnTo, SharePanel, UnavailablePage } from './account-views';
 import { libraryPresets, preset, presetForDemo, presetURL } from './preset';
 import { forestArt, presetArtSize } from './art';
+import './fonts.css';
 import './styles.css';
 import './account.css';
 
@@ -16,8 +17,19 @@ const readSession = (key: string) => { try { return sessionStorage.getItem(key) 
 const saveSession = (key: string, value: string) => { try { if (value) sessionStorage.setItem(key, value); else sessionStorage.removeItem(key); } catch { /* Reading remains available without storage. */ } };
 const pendingKey = (username: string) => `fable-studio:pending:${username}`;
 const draftKey = (username: string) => `fable-studio:draft:${username}`;
-type PendingRequest = { concept: string; format: LearningFormat; id: string };
-const readPending = (username: string): PendingRequest | null => { try { const value = JSON.parse(readSession(pendingKey(username))); return typeof value?.concept === 'string' && typeof value?.id === 'string' && ['text', 'comic'].includes(value?.format) ? value : null; } catch { return null; } };
+type ComposeDraft = { concept: string; format: LearningFormat; storyLength: StoryLength };
+type PendingRequest = ComposeDraft & { id: string };
+const normalizedLength = (format: LearningFormat, length: unknown): StoryLength => format === 'text' && length === 'long' ? 'long' : 'standard';
+const readPending = (username: string): PendingRequest | null => { try { const value = JSON.parse(readSession(pendingKey(username))); return typeof value?.concept === 'string' && typeof value?.id === 'string' && ['text', 'comic'].includes(value?.format) ? { ...value, storyLength: normalizedLength(value.format, value.storyLength) } : null; } catch { return null; } };
+function readDraft(username: string): ComposeDraft | null {
+  const raw = readSession(draftKey(username));
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw);
+    if (typeof value?.concept === 'string' && ['text', 'comic'].includes(value?.format)) return { concept: value.concept, format: value.format, storyLength: normalizedLength(value.format, value.storyLength) };
+  } catch { /* Older drafts contain only the concept string. */ }
+  return { concept: raw, format: 'text', storyLength: 'standard' };
+}
 function clearPrivateStorage() {
   try {
     localStorage.removeItem('fable-studio:current-job'); localStorage.removeItem('fable-studio:pending-request');
@@ -63,7 +75,7 @@ function Home() {
 }
 
 function FormatSwitch({ format, onChange, disabled = false, comicDisabled = false }: { format: LearningFormat; onChange: (f: LearningFormat) => void; disabled?: boolean; comicDisabled?: boolean }) {
-  return <div className="format-switch" role="group" aria-label="阅读方式">{(['text', 'comic'] as const).map(f => <button key={f} type="button" aria-pressed={format === f} disabled={disabled || (f === 'comic' && comicDisabled)} title={f === 'comic' && comicDisabled ? '此示例为文字读本' : undefined} onClick={() => onChange(f)}>{f === 'text' ? '文字' : '漫画'}</button>)}</div>;
+  return <div className="format-switch" role="group" aria-label="阅读方式">{(['text', 'comic'] as const).map(f => <button key={f} type="button" aria-pressed={format === f} disabled={disabled || (f === 'comic' && comicDisabled)} title={f === 'comic' && comicDisabled ? '此读本仅提供文字' : undefined} onClick={() => onChange(f)}>{f === 'text' ? '文字' : '漫画'}</button>)}</div>;
 }
 
 function Progress({ job, busy, offline, onAction }: { job: JobDTO; busy: boolean; offline: boolean; onAction: (a: 'pause' | 'resume') => void }) {
@@ -99,7 +111,7 @@ function Question({ task }: { task: TaskDTO }) {
 }
 
 function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction, readOnly = false, storageScope = 'preset', shareControl, bookArrival = false }: { job: JobDTO; format: LearningFormat; busy?: boolean; onFormat: (f: LearningFormat) => void; onAction?: (a: 'pause' | 'resume') => void; readOnly?: boolean; storageScope?: string; shareControl?: React.ReactNode; bookArrival?: boolean }) {
-  const comicAvailable = !isDemo(job) || job.stories.some(story => story.pages.some(page => page.image.status === 'ready' && page.image.url));
+  const comicAvailable = job.storyLength !== 'long' && (!isDemo(job) || job.stories.some(story => story.pages.some(page => page.image.status === 'ready' && page.image.url)));
   const format = comicAvailable ? requestedFormat : 'text';
   const storageKey = `fable-studio:page:${storageScope}:${job.id}`;
   const [position, setPosition] = useState(() => readStorage(storageKey));
@@ -225,7 +237,15 @@ function LibraryController({ user, legacyCount, onSession, onAuthLost, onOpenBoo
 function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { user: UserDTO | null; onAuthLost: () => void; initialJob?: JobDTO | null; bookArrival?: boolean }) {
   const username = user?.username || 'guest';
   const params = new URLSearchParams(location.search);
-  const [concept, setConcept] = useState(() => readPending(username)?.concept || readSession(draftKey(username)) || readSession(draftKey('guest')));
+  const [draft, setDraft] = useState<ComposeDraft>(() => {
+    const pending = readPending(username);
+    if (pending) return { concept: pending.concept, format: pending.format, storyLength: pending.storyLength };
+    const saved = readDraft(username) || readDraft('guest');
+    const explicitMode = !params.has('job') && !params.has('demo') && params.has('mode');
+    const format = explicitMode ? modeFromURL() : saved?.format || modeFromURL();
+    return { concept: saved?.concept || '', format, storyLength: normalizedLength(format, explicitMode && params.has('storyLength') ? params.get('storyLength') : saved?.storyLength) };
+  });
+  const { concept, format: composeFormat, storyLength } = draft;
   const [format, setFormat] = useState<LearningFormat>(() => initialJob?.format || modeFromURL());
   const [jobs, setJobs] = useState<JobDTO[]>([]);
   const [job, setJob] = useState<JobDTO | null>(() => { if (initialJob && (user || isDemo(initialJob))) return initialJob; const example = presetForDemo(params.get('demo')); return example ? { ...example, format: modeFromURL() } : null; });
@@ -250,6 +270,15 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
   const shareContent = useRef<HTMLDivElement>(null);
   const shareNeedsFocus = useRef(false);
   const beforeShare = useRef<{ x: number; y: number; jobId: string } | null>(null);
+  useEffect(() => { saveSession(draftKey(username), JSON.stringify(draft)); }, [username, draft]);
+  function updateDraft(patch: Partial<ComposeDraft>) {
+    const next = { ...draft, ...patch }; next.storyLength = normalizedLength(next.format, next.storyLength); setDraft(next);
+    if (!job && (patch.format || patch.storyLength)) {
+      const url = new URL(location.href); url.searchParams.set('mode', next.format);
+      if (next.storyLength === 'long') url.searchParams.set('storyLength', 'long'); else url.searchParams.delete('storyLength');
+      history.replaceState(history.state, '', url);
+    }
+  }
   function changeShareOpen(open: boolean) {
     if (open && !sharing && job) { beforeShare.current = { x: window.scrollX, y: window.scrollY, jobId: job.id }; shareNeedsFocus.current = true; }
     setSharing(open);
@@ -275,7 +304,7 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
   }, [sharing, job?.id, shareLoading]);
   function lostAuth() { ++pollGeneration.current; selectedJob.current = ''; setJob(null); setJobs([]); setShare(null); setSharing(false); onAuthLost(); }
   function updateURL(next: JobDTO) {
-    const url = new URL(location.href); url.searchParams.set('mode', next.format);
+    const url = new URL(location.href); url.searchParams.set('mode', next.format); url.searchParams.delete('storyLength');
     if (isDemo(next)) { url.searchParams.delete('job'); url.searchParams.set('demo', next.id === preset.id ? '1' : 'education-xai'); }
     else { url.searchParams.delete('demo'); url.searchParams.set('job', next.id); }
     history.replaceState(history.state, '', url);
@@ -340,18 +369,18 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
     finally { mutation.current = false; setBusy(false); }
   }
   function changeFormat(next: LearningFormat) {
-    if (next === format || busy) return;
+    if (next === format || busy || (next === 'comic' && job?.storyLength === 'long')) return;
     if (!job || isDemo(job)) { setFormat(next); if (job) accept({ ...job, format: next }); else { const url = new URL(location.href); url.searchParams.set('mode', next); history.replaceState(null, '', url); } }
     else void mutate(async () => { const result = await api.format(job.id, next); accept(result.job); });
   }
   async function generate(event: React.FormEvent) {
     event.preventDefault(); if (!concept.trim() || offline) return;
-    if (!user) { saveSession(draftKey('guest'), concept); location.assign(authURL('login', `/learn?mode=${format}`)); return; }
+    if (!user) { saveSession(draftKey('guest'), JSON.stringify(draft)); location.assign(authURL('login', `/learn?${new URLSearchParams({ mode: composeFormat, storyLength })}`)); return; }
     await mutate(async () => {
       const value = concept.trim();
-      if (requestKey.current?.concept !== value || requestKey.current.format !== format) requestKey.current = { concept: value, format, id: crypto.randomUUID() };
+      if (requestKey.current?.concept !== value || requestKey.current.format !== composeFormat || requestKey.current.storyLength !== storyLength) requestKey.current = { concept: value, format: composeFormat, storyLength, id: crypto.randomUUID() };
       saveSession(pendingKey(username), JSON.stringify(requestKey.current));
-      const result = await api.create(value, format, requestKey.current.id); accept(result.job); requestKey.current = null; saveSession(pendingKey(username), ''); saveSession(draftKey(username), '');
+      const result = await api.create(value, composeFormat, requestKey.current.id, storyLength); accept(result.job); requestKey.current = null; saveSession(pendingKey(username), ''); setDraft(current => ({ ...current, concept: '' }));
     });
   }
   const performAction = (action: 'pause' | 'resume') => { if (job && user) void mutate(async () => { const result = await api.action(job.id, action); accept(result.job); setRefreshKey(key => key + 1); }); };
@@ -369,15 +398,15 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
   if (!user && params.get('job')) return <PrivateEntry />;
   return <main id="main" className="studio">
     <aside className="workspace">
-      <div className="compose"><h1>今天，想读懂什么？</h1><form onSubmit={generate}><label className="sr-only" htmlFor="concept">想了解的概念</label><textarea id="concept" value={concept} onChange={e => { setConcept(e.target.value); saveSession(draftKey(username), e.target.value); }} rows={3} maxLength={120} placeholder="熵、贝叶斯推断、机会成本…" required disabled={busy} /><div className="compose-bottom"><FormatSwitch format={format} onChange={changeFormat} disabled={busy} /><button className="button primary" disabled={busy || offline || !concept.trim()}>{busy ? '处理中…' : user ? '生成故事' : '登录后生成'}<Arrow /></button></div></form>
-      {!job && <div className="concept-suggestions">{['沉没成本', '机制识别', '涌现'].map(value => <button key={value} type="button" onClick={() => { setConcept(value); saveSession(draftKey(username), value); document.getElementById('concept')?.focus(); }}>{value} ↗</button>)}</div>}</div>
+      <div className="compose"><h1>今天，想读懂什么？</h1><form onSubmit={generate}><label className="sr-only" htmlFor="concept">想了解的概念</label><textarea id="concept" value={concept} onChange={e => updateDraft({ concept: e.target.value })} rows={3} maxLength={120} placeholder="熵、贝叶斯推断、机会成本…" required disabled={busy} /><div className="compose-bottom"><FormatSwitch format={composeFormat} onChange={next => updateDraft({ format: next })} disabled={busy} /><button className="button primary" disabled={busy || offline || !concept.trim()}>{busy ? '处理中…' : user ? '生成故事' : '登录后生成'}<Arrow /></button></div>{composeFormat === 'text' && <div className="story-length-row"><div className="story-length-switch" role="group" aria-label="文字篇幅">{(['standard', 'long'] as const).map(length => <button type="button" key={length} aria-pressed={storyLength === length} disabled={busy} onClick={() => updateDraft({ storyLength: length })}>{length === 'long' ? '长篇' : '标准'}</button>)}</div>{storyLength === 'long' && <span>8–16页</span>}</div>}</form>
+      {!job && <div className="concept-suggestions">{['沉没成本', '机制识别', '涌现'].map(value => <button key={value} type="button" onClick={() => { updateDraft({ concept: value }); document.getElementById('concept')?.focus(); }}>{value} ↗</button>)}</div>}</div>
       {job && <Progress job={job} busy={busy} offline={offline} onAction={performAction} />}
       {offline && !job && <p className="form-error" role="status">当前离线。恢复连接后可以继续生成。</p>}
       {error && <div className="workspace-error" role="alert"><p>{error}</p><button type="button" onClick={() => setError('')}>收起</button></div>}
       {user ? <section className="bookshelf"><div className="shelf-heading"><h2><a href="/learn/library">我的书架 <Arrow /></a></h2><span>{jobs.length + libraryPresets.length}</span></div><div className="shelf-list">{[...libraryPresets, ...jobs.filter(item => !isDemo(item))].slice(0, 5).map((item, i) => <button type="button" key={item.id} className={`shelf-item ${job?.id === item.id ? 'selected' : ''}`} disabled={busy || shareBusy} onClick={() => openJob(item)}><span className="shelf-index">{String(i + 1).padStart(2, '0')}</span><span><strong>{item.stories[0]?.title || item.concept}</strong><small>{bookCreationDate(item.createdAt)}{item.format === 'comic' ? ' 作画' : ' 写下'}{item.status !== 'completed' && ` · ${label(item)}`}</small></span><span aria-hidden="true">↗</span></button>)}</div></section> : <p className="guest-compose-note"><a href={authURL('register')}>创建自己的书架</a>，故事下次接着读。</p>}
-      <button type="button" className="workspace-demo" onClick={() => accept({ ...preset, format })} disabled={busy || shareBusy}>预置示例《雾港渡船》 <Arrow /></button>
+      <button type="button" className="workspace-demo" onClick={() => accept({ ...preset, format: composeFormat })} disabled={busy || shareBusy}>预置示例《雾港渡船》 <Arrow /></button>
     </aside>
-    {job ? <Collapsible.Root open={sharing} onOpenChange={changeShareOpen} asChild><div className={`reading-workspace ${sharing ? 'with-share' : ''}`}><Reader key={job.id} job={job} format={format} busy={busy} onFormat={changeFormat} onAction={performAction} storageScope={isDemo(job) ? 'preset' : username} bookArrival={bookArrival} shareControl={user && !isDemo(job) ? <Collapsible.Trigger asChild><button ref={shareTrigger} type="button" className="reader-share-button" disabled={shareBusy}>分享</button></Collapsible.Trigger> : undefined} /><Collapsible.Content ref={shareContent} className="share-disclosure"><SharePanel job={job} share={share} known={shareKnown} loading={shareLoading || (!shareKnown && !shareError)} busy={shareBusy} error={shareError} notice={shareNotice} onCreate={() => void changeSharing('publish')} onRevoke={() => void changeSharing('revoke')} onReload={() => { setShareError(''); setShareKnown(false); setShareRefresh(value => value + 1); }} onClose={() => changeShareOpen(false)} /></Collapsible.Content></div></Collapsible.Root> : <div className="reading-workspace"><Welcome format={format} onDemo={() => accept({ ...preset, format })} /></div>}
+    {job ? <Collapsible.Root open={sharing} onOpenChange={changeShareOpen} asChild><div className={`reading-workspace ${sharing ? 'with-share' : ''}`}><Reader key={job.id} job={job} format={format} busy={busy} onFormat={changeFormat} onAction={performAction} storageScope={isDemo(job) ? 'preset' : username} bookArrival={bookArrival} shareControl={user && !isDemo(job) ? <Collapsible.Trigger asChild><button ref={shareTrigger} type="button" className="reader-share-button" disabled={shareBusy}>分享</button></Collapsible.Trigger> : undefined} /><Collapsible.Content ref={shareContent} className="share-disclosure"><SharePanel job={job} share={share} known={shareKnown} loading={shareLoading || (!shareKnown && !shareError)} busy={shareBusy} error={shareError} notice={shareNotice} onCreate={() => void changeSharing('publish')} onRevoke={() => void changeSharing('revoke')} onReload={() => { setShareError(''); setShareKnown(false); setShareRefresh(value => value + 1); }} onClose={() => changeShareOpen(false)} /></Collapsible.Content></div></Collapsible.Root> : <div className="reading-workspace"><Welcome format={composeFormat} onDemo={() => accept({ ...preset, format: composeFormat })} /></div>}
   </main>;
 }
 

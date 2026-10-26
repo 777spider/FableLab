@@ -20,15 +20,17 @@ export class JobService {
  private storyCount(r:RecordJob):1|2{return r.dto.storyCount??2;}
  private canQualityContinue(r:RecordJob){return !r.qualityRecovery&&r.dto.status==='failed'&&r.dto.error?.code==='QUALITY_REVIEW_REQUIRED'&&r.dto.progress.attempts<r.dto.progress.attemptBudget&&!!r.dto.knowledge&&r.dto.stories.length===this.storyCount(r)&&!!r.lessonWire;}
  private owned(owner:string,id:string){const r=this.records.find(r=>r.owner===owner&&r.dto.id===id);if(!r)throw new GenerationError('JOB_NOT_FOUND');return r;}
- private dto(r:RecordJob){const value=structuredClone(r.dto);value.storyCount=this.storyCount(r);value.progress.elapsedMs=(['queued','running'].includes(value.status)?Date.now():Date.parse(value.updatedAt))-Date.parse(value.createdAt);return value;}
+ private dto(r:RecordJob){const value=structuredClone(r.dto);value.storyCount=this.storyCount(r);value.storyLength??='standard';value.progress.elapsedMs=(['queued','running'].includes(value.status)?Date.now():Date.parse(value.updatedAt))-Date.parse(value.createdAt);return value;}
  get(owner:string,id:string){const r=this.records.find(r=>r.owner===owner&&r.dto.id===id);return r?this.dto(r):null;}
  list(owner:string){return this.records.filter(r=>r.owner===owner).sort((a,b)=>b.dto.createdAt.localeCompare(a.dto.createdAt)).map(r=>this.dto(r));}
  create(owner:string,request:CreateJobRequest){
+  const storyLength=request.storyLength??'standard';
+  if(storyLength==='long'&&request.format!=='text')throw new GenerationError('LONG_TEXT_ONLY');
   const previous=this.records.find(r=>r.owner===owner&&r.clientRequestId===request.clientRequestId);
-  if(previous){if(previous.dto.concept!==request.concept||previous.requestedFormat!==request.format)throw new GenerationError('REQUEST_CONFLICT');return this.dto(previous);}
+  if(previous){if(previous.dto.concept!==request.concept||previous.requestedFormat!==request.format||(previous.dto.storyLength??'standard')!==storyLength)throw new GenerationError('REQUEST_CONFLICT');return this.dto(previous);}
   if(this.records.filter(r=>r.owner===owner&&['queued','running'].includes(r.dto.status)).length>=2)throw new GenerationError('TOO_MANY_JOBS');
   if(this.records.length>=2000)throw new GenerationError('STORAGE_LIMIT');
-  const now=new Date().toISOString();const r:RecordJob={owner,clientRequestId:request.clientRequestId,requestedFormat:request.format,attempts:{},retried:[],contentRepaired:[],candidates:{},candidateDetails:{},wires:[],lessonWire:null,review:null,history:[],dto:{id:randomUUID(),concept:request.concept,format:request.format,storyCount:1,status:'queued',phase:'knowledge',createdAt:now,updatedAt:now,progress:{completedStages:[],stageLabel:labels.knowledge,elapsedMs:0,etaMs:null,attempts:0,attemptBudget:48,retrying:false},knowledge:null,stories:[],lesson:null,tasks:[],discussion:[],error:null,quality:'pending',provenance:this.provider.provenance}};
+  const now=new Date().toISOString();const r:RecordJob={owner,clientRequestId:request.clientRequestId,requestedFormat:request.format,attempts:{},retried:[],contentRepaired:[],candidates:{},candidateDetails:{},wires:[],lessonWire:null,review:null,history:[],dto:{id:randomUUID(),concept:request.concept,format:request.format,storyCount:1,storyLength,status:'queued',phase:'knowledge',createdAt:now,updatedAt:now,progress:{completedStages:[],stageLabel:labels.knowledge,elapsedMs:0,etaMs:null,attempts:0,attemptBudget:48,retrying:false},knowledge:null,stories:[],lesson:null,tasks:[],discussion:[],error:null,quality:'pending',provenance:this.provider.provenance}};
   this.records.push(r);this.touch(r);this.schedule();return this.dto(r);
  }
  pause(owner:string,id:string){const r=this.owned(owner,id);if(['queued','running'].includes(r.dto.status)){r.dto.status='paused';r.dto.progress.retrying=false;this.current?.record===r&&this.current.controller.abort();this.touch(r);}return this.dto(r);}
@@ -38,7 +40,7 @@ export class JobService {
   if(r.dto.status==='completed'&&!(r.dto.format==='comic'&&r.dto.stories.some(s=>s.pages.some(p=>p.image.status!=='ready'))))return this.dto(r);
   r.dto.status='queued';r.dto.error=null;r.dto.progress.retrying=false;this.touch(r);this.schedule();return this.dto(r);
  }
- setFormat(owner:string,id:string,format:LearningFormat){const r=this.owned(owner,id);r.dto.format=format;if(format==='text'&&this.current?.record===r&&r.dto.phase==='images')this.current.controller.abort();
+ setFormat(owner:string,id:string,format:LearningFormat){const r=this.owned(owner,id);if(r.dto.storyLength==='long'&&format!=='text')throw new GenerationError('LONG_TEXT_ONLY');r.dto.format=format;if(format==='text'&&this.current?.record===r&&r.dto.phase==='images')this.current.controller.abort();
   if(format==='comic'&&r.dto.status==='completed'&&r.dto.stories.some(s=>s.pages.some(p=>p.image.status!=='ready'))){r.dto.phase='images';r.dto.status='queued';}
   this.touch(r);this.schedule();return this.dto(r);
  }
@@ -49,7 +51,7 @@ export class JobService {
   finally{r.dto.progress.retrying=false;this.touch(r);this.current=null;this.schedule();}
  }
  private message(code:string){return ({UPSTREAM_TIMEOUT:'本步骤等待超时，已保存之前完成的内容。',UPSTREAM_BUSY:'生成服务暂时繁忙，已保存之前完成的内容。',CONTENT_INVALID:'本步骤未通过内容检查，已保留先前成果。',REVIEW_OUTPUT_INVALID:'复核返回的依据未能对应当前内容，已有成果已保存；这不表示正文已被判错。',QUALITY_REVIEW_REQUIRED:'学理复核仍发现问题，当前内容保留供阅读，暂不能作为已复核材料。',ATTEMPT_BUDGET_EXHAUSTED:'本任务已达到尝试上限，现有内容已保存。',UPSTREAM_NOT_CONFIGURED:'生成服务尚未配置完成。'} as Record<string,string>)[code]??'本步骤暂未完成，已有内容已保存，可继续本步骤。';}
- private input(r:RecordJob):GenerationInput{return {concept:r.dto.concept,knowledge:r.dto.knowledge,stories:r.dto.stories,storyCount:this.storyCount(r),lesson:r.lessonWire};}
+ private input(r:RecordJob):GenerationInput{return {concept:r.dto.concept,knowledge:r.dto.knowledge,stories:r.dto.stories,storyCount:this.storyCount(r),storyLength:r.dto.storyLength??'standard',lesson:r.lessonWire};}
  private done(r:RecordJob,phase:string){if(!r.dto.progress.completedStages.includes(phase))r.dto.progress.completedStages.push(phase);this.touch(r);}
  private async attempt<T>(r:RecordJob,key:string,signal:AbortSignal,operation:(repair?:unknown,details?:string[])=>Promise<T>):Promise<T>{
   let details:string[]|undefined;let repair=r.candidates[key];if(repair)details=r.candidateDetails[key]??['Repair the saved rejected candidate, preserve valid content.'];
@@ -92,7 +94,7 @@ export class JobService {
   }
   if(r.dto.quality!=='checked')throw new GenerationError('QUALITY_REVIEW_REQUIRED');
   if(recovery){recovery.state='closed';this.touch(r);}
-  if(r.dto.format==='comic'){r.dto.phase='images';this.touch(r);await this.images(r,signal);}
+  if(r.dto.format==='comic'&&r.dto.storyLength!=='long'){r.dto.phase='images';this.touch(r);await this.images(r,signal);}
   if(signal.aborted)throw new GenerationError('ABORTED');r.dto.status='completed';r.dto.phase='complete';r.dto.error=null;this.touch(r);
  }
  private async images(r:RecordJob,signal:AbortSignal){

@@ -106,18 +106,23 @@ test('Unicode SPA auth/library routes work and unrelated routes remain unavailab
   } finally {await s.close();}
 });
 
-test('only hashed public display art receives immutable production caching', async () => {
+test('only hashed public art and the specific reading font receive immutable production caching', async () => {
   for (const production of [true, false]) {
     const s = await setup(production);
     try {
-      const directory = join(s.dir, 'dist', 'art', 'optimized');
-      mkdirSync(directory, {recursive: true});
-      const bytes = Buffer.from('public display fixture'), name = createHash('sha256').update(bytes).digest('hex') + '.webp';
-      for (const file of [name, 'preview.webp', 'forest.png']) writeFileSync(join(directory, file), bytes);
-      for (const file of [name, 'preview.webp', 'forest.png']) {
-        const response = await fetch(s.url + '/learn/art/optimized/' + file);
-        assert.equal(response.status, 200); assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
-        assert.equal(response.headers.get('cache-control'), production && file === name ? 'public, max-age=31536000, immutable' : production ? 'public, max-age=3600' : 'public, max-age=0');
+      const bytes = Buffer.from('public static cache fixture'), hash = createHash('sha256').update(bytes).digest('hex');
+      for (const {path,files,immutable} of [
+        {path: ['art','optimized'], files: [hash+'.webp','preview.webp','forest.png'], immutable: hash+'.webp'},
+        {path: ['fonts','lxgw-wenkai-screen-v1.7.0'], files: [hash+'.woff2','preview.woff2','LICENSE','font.css'], immutable: hash+'.woff2'},
+        {path: ['fonts','other'], files: [hash+'.woff2'], immutable: null},
+      ]) {
+        const directory = join(s.dir, 'dist', ...path); mkdirSync(directory, {recursive: true});
+        for (const file of files) writeFileSync(join(directory, file), bytes);
+        for (const file of files) {
+          const response = await fetch(s.url + '/learn/' + path.join('/') + '/' + file);
+          assert.equal(response.status, 200); assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
+          assert.equal(response.headers.get('cache-control'), production && file === immutable ? 'public, max-age=31536000, immutable' : production ? 'public, max-age=3600' : 'public, max-age=0');
+        }
       }
     } finally {await s.close();}
   }

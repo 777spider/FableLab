@@ -5,6 +5,7 @@
   --paper: oklch(95.4% .014 86); --sheet: oklch(98.5% .009 86); --ink: oklch(25% .018 130);
   --muted: oklch(49% .017 96); --line: oklch(82% .022 90); --red: oklch(52% .18 30); --green: oklch(39% .07 155);
   --serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  --book-font: "Fable WenKai", var(--serif);
 }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
@@ -85,6 +86,11 @@ main { width: 100%; }
 .compose textarea::placeholder { color: oklch(57% .014 95); }
 .compose-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
 .compose-bottom .button { gap: 12px; padding: 12px 14px; }
+.story-length-row { display: flex; align-items: center; gap: 18px; margin-top: 12px; }
+.story-length-switch { display: inline-flex; gap: 18px; }
+.story-length-switch button { padding: 5px 0; border-bottom: 1px solid transparent; color: var(--muted); font-size: 12px; }
+.story-length-switch button[aria-pressed=true] { color: var(--ink); border-bottom-color: var(--ink); }
+.story-length-row > span { color: var(--muted); font-size: 11px; }
 .format-switch { display: inline-flex; flex: 0 0 auto; border: 1px solid var(--line); padding: 3px; gap: 2px; }
 .format-switch button { font-size: 12px; padding: 8px 12px; color: var(--muted); }
 .format-switch button[aria-pressed=true] { background: var(--ink); color: var(--sheet); }
@@ -113,6 +119,7 @@ main { width: 100%; }
 .shelf-heading > span { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .shelf-empty { font-family: var(--serif); color: var(--muted); font-size: 16px; line-height: 1.9; padding-top: 28px; }
 .shelf-list { display: flex; flex-direction: column; }
+.shelf-item strong { font-family: var(--book-font); }
 .shelf-item { display: grid; grid-template-columns: 22px 1fr 18px; width: 100%; align-items: center; text-align: left; padding: 17px 0; gap: 10px; border-bottom: 1px solid var(--line); }
 .shelf-item:hover, .shelf-item.selected { color: var(--red); }
 .shelf-index { align-self: start; padding-top: 3px; font-size: 10px; font-variant-numeric: tabular-nums; }
@@ -131,7 +138,7 @@ main { width: 100%; }
 .welcome-illustration img { width: 100%; }
 .welcome-page { background: var(--sheet); border: 1px solid var(--line); padding: 28px 58px; max-width: 680px; margin: 4px auto 0; position: relative; box-shadow: 9px 9px 0 oklch(89% .021 86); }
 .paper-number { position: absolute; top: 17px; right: 25px; color: var(--red); font-size: 12px; }
-.welcome-page h2 { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 10px 0 24px; }
+.welcome-page h2 { font-family: var(--book-font); font-weight: 400; font-size: 30px; margin: 10px 0 24px; }
 .welcome-page p { font: 17px/2 var(--serif); margin-top: 15px; text-align: justify; }
 .paper-end { display: block; text-align: center; margin-top: 25px; color: var(--red); }
 .demo-link { display: flex; align-items: center; justify-content: space-between; text-align: left; width: 100%; margin-top: 30px; padding: 18px 0; border-top: 1px solid var(--ink); font-size: 12px; }
@@ -158,11 +165,11 @@ main { width: 100%; }
 .reading-page { padding: 26px 40px 18px; max-width: 900px; margin: auto; animation: pageIn 180ms ease-out; }
 .page-heading { display: flex; align-items: baseline; gap: 17px; margin-bottom: 23px; }
 .page-sequence { color: var(--red); font-size: 12px; font-family: Geist, sans-serif; flex: 0 0 auto; }
-.page-heading h1 { font-family: var(--serif); font-weight: 500; font-size: 30px; line-height: 1.4; letter-spacing: -.025em; outline: none; }
+.page-heading h1 { font-family: var(--book-font); font-weight: 500; font-size: 30px; line-height: 1.4; letter-spacing: -.025em; outline: none; }
 .text-page { max-width: 710px; padding: 42px 48px 32px; }
 .text-page .page-heading { margin-bottom: 34px; }
 .text-page .page-heading h1 { font-size: 34px; }
-.prose { font-family: var(--serif); font-size: 17px; line-height: 2; overflow-wrap: anywhere; text-wrap: pretty; }
+.prose { font-family: var(--book-font); font-size: 17px; line-height: 2; overflow-wrap: anywhere; text-wrap: pretty; }
 .prose p + p { margin-top: 1em; }
 .text-page .prose { font-size: 20px; line-height: 2.1; text-align: justify; }
 .text-page .prose p + p { margin-top: 1.2em; }

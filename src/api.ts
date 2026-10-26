@@ -1,4 +1,4 @@
-import type { AccessResponse, AuthResponse, JobDTO, JobResponse, JobsResponse, LearningFormat, PublicShareResponse, SessionResponse, ShareResponse } from '../shared/contracts';
+import type { AccessResponse, AuthResponse, JobDTO, JobResponse, JobsResponse, LearningFormat, PublicShareResponse, SessionResponse, ShareResponse, StoryLength } from '../shared/contracts';
 
 export class ApiError extends Error {
   constructor(message: string, public status: number, public code = '') { super(message); }
@@ -29,7 +29,7 @@ export const api = {
   unlock: (code: string) => request<AccessResponse>('/access', { code }),
   jobs: () => request<JobsResponse>('/jobs'),
   job: (id: string) => request<JobResponse>(`/jobs/${encodeURIComponent(id)}`),
-  create: (concept: string, format: LearningFormat, clientRequestId: string) => request<JobResponse>('/jobs', { concept, format, clientRequestId }),
+  create: (concept: string, format: LearningFormat, clientRequestId: string, storyLength: StoryLength = 'standard') => request<JobResponse>('/jobs', { concept, format, clientRequestId, storyLength }),
   action: (id: string, action: 'pause' | 'resume') => request<JobResponse>(`/jobs/${encodeURIComponent(id)}/${action}`, {}),
   format: (id: string, format: LearningFormat) => request<JobResponse>(`/jobs/${encodeURIComponent(id)}/format`, { format }),
   share: (id: string) => request<ShareResponse>(`/jobs/${encodeURIComponent(id)}/share`),

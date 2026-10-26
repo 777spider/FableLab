@@ -6,7 +6,7 @@
 
 一个可自部署的中文学习应用：先读寓言，再理解故事如何对应概念、又在哪里不再适用。
 
-[![Check](https://github.com/bigWhiteTofu/FableLab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bigWhiteTofu/FableLab/actions/workflows/ci.yml)
+[![Check](https://github.com/777spider/FableLab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777spider/FableLab/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-315b49)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-24%2B-315b49)](https://nodejs.org/)
 
@@ -35,7 +35,7 @@
 需要 **Node.js 24+**、npm 和 Git；实际耗时取决于下载与安装速度。
 
 ```sh
-git clone https://github.com/bigWhiteTofu/FableLab.git
+git clone https://github.com/777spider/FableLab.git
 cd FableLab
 npm ci
 npm run build
@@ -89,7 +89,7 @@ Vite 构建前端，密钥留在服务端。学习资料默认私有，由所有
 
 ## 参与贡献
 
-欢迎提交 [Issue](https://github.com/bigWhiteTofu/FableLab/issues) 或 Pull Request，尤其欢迎附有证据的概念纠错、无障碍改进与模型适配器。测试请使用合成资料，示例中移除私人数据与凭据。
+欢迎提交 [Issue](https://github.com/777spider/FableLab/issues) 或 Pull Request，尤其欢迎附有证据的概念纠错、无障碍改进与模型适配器。测试请使用合成资料，示例中移除私人数据与凭据。
 
 代码修改提交前运行 `npm test` 与 `npm run build`。
 

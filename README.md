@@ -6,7 +6,7 @@
 
 A self-hostable, Chinese-first learning app that turns a difficult concept into a fable, then connects the story back to the underlying ideas.
 
-[![Check](https://github.com/bigWhiteTofu/FableLab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bigWhiteTofu/FableLab/actions/workflows/ci.yml)
+[![Check](https://github.com/777spider/FableLab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777spider/FableLab/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-315b49)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-24%2B-315b49)](https://nodejs.org/)
 
@@ -35,7 +35,7 @@ This is a learning app prototype. Its educational effects have not been formally
 Requires **Node.js 24+**, npm, and Git. Allow about five minutes, depending on installation speed.
 
 ```sh
-git clone https://github.com/bigWhiteTofu/FableLab.git
+git clone https://github.com/777spider/FableLab.git
 cd FableLab
 npm ci
 npm run build
@@ -89,7 +89,7 @@ Inspired by [Anthropic's Amanda Askell sharing her parable prompt in an April 20
 
 ## Contribute
 
-[Issues](https://github.com/bigWhiteTofu/FableLab/issues) and pull requests are welcome—especially concept corrections with evidence, accessibility improvements, and provider adapters. Use synthetic fixtures for tests and remove private data and credentials from examples.
+[Issues](https://github.com/777spider/FableLab/issues) and pull requests are welcome—especially concept corrections with evidence, accessibility improvements, and provider adapters. Use synthetic fixtures for tests and remove private data and credentials from examples.
 
 Run `npm test` and `npm run build` before submitting code changes.
 

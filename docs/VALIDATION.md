@@ -16,7 +16,7 @@ The end-to-end checks used a fresh temporary data directory with real model acce
 
 ## Hosted CI status
 
-The [GitHub Actions workflow](../.github/workflows/ci.yml) installs dependencies, runs the tests and builds the app. On 2026-10-26, [hosted run 40322549786, attempt 2](https://github.com/bigWhiteTofu/FableLab/actions/runs/40322549786/attempts/2) passed installation, tests and the production build for commit `d7f4cb11ba3260578b5946db979d08882934f861`, the `v0.1.0` release commit. The earlier execution restriction was resolved; no application-code change was needed. The README badge shows the current `main` workflow status.
+The [GitHub Actions workflow](../.github/workflows/ci.yml) installs dependencies, runs the tests and builds the app. On 2026-10-26, [hosted run 40322549786, attempt 2](https://github.com/777spider/FableLab/actions/runs/40322549786/attempts/2) passed installation, tests and the production build for commit `d7f4cb11ba3260578b5946db979d08882934f861`, the `v0.1.0` release commit. The earlier execution restriction was resolved; no application-code change was needed. The README badge shows the current `main` workflow status.
 
 Reproduce the code checks with:
 

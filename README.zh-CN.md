@@ -6,7 +6,7 @@
 
 一个可自部署的中文学习应用：先读寓言，再理解故事如何对应概念、又在哪里不再适用。
 
-[![Local tests: 53 passed](https://img.shields.io/badge/local_tests-53_passed-315b49)](docs/VALIDATION.md)
+[![Check](https://github.com/bigWhiteTofu/FableLab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bigWhiteTofu/FableLab/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-315b49)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-24%2B-315b49)](https://nodejs.org/)
 
@@ -28,7 +28,7 @@
 
 当前定位为学习应用原型，尚无正式教学效果数据。生成来源保留待核验标记，机器初检不能代替学科专家审核。
 
-[验收记录](docs/VALIDATION.md)：本地测试、构建和合成流程已通过。本次预览的 GitHub Actions 尚未成功完成；徽标表示本地测试结果。
+[验收记录](docs/VALIDATION.md)：本地测试、构建和合成流程已通过；GitHub 自动检查也已完成依赖安装、测试和生产构建，全部通过。
 
 ## 五分钟本地体验：无需 API Key
 

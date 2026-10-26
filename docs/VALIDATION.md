@@ -1,6 +1,6 @@
 # Public preview validation
 
-Checked on 2026-10-26 with Node.js 24.19.0 and npm 11.17.0. Application source corresponds to commit `407d5d2f303dfaec624e4ed4da9edcc2f65aacca`; the subsequent publication update changes documentation only.
+Checked locally on 2026-10-26 with Node.js 24.19.0 and npm 11.17.0. Application source corresponds to commit `407d5d2f303dfaec624e4ed4da9edcc2f65aacca`; subsequent publication updates change documentation only.
 
 | Check | Result |
 | --- | --- |
@@ -16,7 +16,7 @@ The end-to-end checks used a fresh temporary data directory with real model acce
 
 ## Hosted CI status
 
-The [GitHub Actions workflow](../.github/workflows/ci.yml) installs dependencies, runs the tests and builds the app. Hosted CI has not completed successfully for this preview: the [initial run](https://github.com/bigWhiteTofu/FableLab/actions/runs/40320345582) was blocked before any job executed. The README badge explicitly reports **local** tests and is not a hosted CI success claim.
+The [GitHub Actions workflow](../.github/workflows/ci.yml) installs dependencies, runs the tests and builds the app. On 2026-10-26, [hosted run 40322549786, attempt 2](https://github.com/bigWhiteTofu/FableLab/actions/runs/40322549786/attempts/2) passed installation, tests and the production build for commit `d7f4cb11ba3260578b5946db979d08882934f861`, the `v0.1.0` release commit. The earlier execution restriction was resolved; no application-code change was needed. The README badge shows the current `main` workflow status.
 
 Reproduce the code checks with:
 

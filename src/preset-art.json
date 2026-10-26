@@ -1,0 +1,86 @@
+{
+  "forest": {
+    "url": "/learn/art/optimized/2f4f433722f83e9f0218f441ad02aa545d9685cfffff6ae101d0a1354cf3a30b.webp",
+    "width": 1280,
+    "height": 704,
+    "bytes": 138124,
+    "sha256": "2f4f433722f83e9f0218f441ad02aa545d9685cfffff6ae101d0a1354cf3a30b"
+  },
+  "lighthouse": {
+    "url": "/learn/art/optimized/d4dc26b41aa8297863e4d33cdefc7abb7880702557d1186f6ed7b70ecf350f1e.webp",
+    "width": 1280,
+    "height": 704,
+    "bytes": 92212,
+    "sha256": "d4dc26b41aa8297863e4d33cdefc7abb7880702557d1186f6ed7b70ecf350f1e"
+  },
+  "/learn/art/optimized/313f99896ad40c3554197e3dcf619e1eedee19136d521081f11df4236c9dda92.webp": {
+    "url": "/learn/art/optimized/313f99896ad40c3554197e3dcf619e1eedee19136d521081f11df4236c9dda92.webp",
+    "width": 1056,
+    "height": 1056,
+    "bytes": 83534,
+    "sha256": "313f99896ad40c3554197e3dcf619e1eedee19136d521081f11df4236c9dda92"
+  },
+  "/learn/art/optimized/3bc2210248d74b507bb95128fda9fde73caf12a7cc3cdfe035a652b1bf877a0a.webp": {
+    "url": "/learn/art/optimized/3bc2210248d74b507bb95128fda9fde73caf12a7cc3cdfe035a652b1bf877a0a.webp",
+    "width": 1056,
+    "height": 1056,
+    "bytes": 131832,
+    "sha256": "3bc2210248d74b507bb95128fda9fde73caf12a7cc3cdfe035a652b1bf877a0a"
+  },
+  "/learn/art/optimized/4154ac6d92ed096b7247a4a4371bfc53d71d15950b56d39de832eb312609c540.webp": {
+    "url": "/learn/art/optimized/4154ac6d92ed096b7247a4a4371bfc53d71d15950b56d39de832eb312609c540.webp",
+    "width": 1056,
+    "height": 1056,
+    "bytes": 106152,
+    "sha256": "4154ac6d92ed096b7247a4a4371bfc53d71d15950b56d39de832eb312609c540"
+  },
+  "/learn/art/optimized/2259c734b416f72b8c9a1f0806ac1f1809a8607f2015f2a165488a988ea700f9.webp": {
+    "url": "/learn/art/optimized/2259c734b416f72b8c9a1f0806ac1f1809a8607f2015f2a165488a988ea700f9.webp",
+    "width": 1056,
+    "height": 1056,
+    "bytes": 82662,
+    "sha256": "2259c734b416f72b8c9a1f0806ac1f1809a8607f2015f2a165488a988ea700f9"
+  },
+  "/learn/art/optimized/cbdd27d97dfede3375752fd7fe4d90fdb325992635953065be3192be6c85a786.webp": {
+    "url": "/learn/art/optimized/cbdd27d97dfede3375752fd7fe4d90fdb325992635953065be3192be6c85a786.webp",
+    "width": 1056,
+    "height": 1056,
+    "bytes": 62304,
+    "sha256": "cbdd27d97dfede3375752fd7fe4d90fdb325992635953065be3192be6c85a786"
+  },
+  "/learn/art/optimized/fc0fd4b5c138f915486a6bb733dcf80385e0e238ebb3fd4172d8044fbfb72b8d.webp": {
+    "url": "/learn/art/optimized/fc0fd4b5c138f915486a6bb733dcf80385e0e238ebb3fd4172d8044fbfb72b8d.webp",
+    "width": 1056,
+    "height": 1056,
+    "bytes": 120766,
+    "sha256": "fc0fd4b5c138f915486a6bb733dcf80385e0e238ebb3fd4172d8044fbfb72b8d"
+  },
+  "/learn/art/optimized/49a461a48665a5cf7e81d7e1fe04f25354ddc71310cca7ac5d4828b489324cbb.webp": {
+    "url": "/learn/art/optimized/49a461a48665a5cf7e81d7e1fe04f25354ddc71310cca7ac5d4828b489324cbb.webp",
+    "width": 1056,
+    "height": 1056,
+    "bytes": 145622,
+    "sha256": "49a461a48665a5cf7e81d7e1fe04f25354ddc71310cca7ac5d4828b489324cbb"
+  },
+  "/learn/art/optimized/9a9a788c5ddbfb2c1ece0be5cbd951d28413a65c9b9bc11a194ffa689ef4886c.webp": {
+    "url": "/learn/art/optimized/9a9a788c5ddbfb2c1ece0be5cbd951d28413a65c9b9bc11a194ffa689ef4886c.webp",
+    "width": 1056,
+    "height": 1056,
+    "bytes": 113436,
+    "sha256": "9a9a788c5ddbfb2c1ece0be5cbd951d28413a65c9b9bc11a194ffa689ef4886c"
+  },
+  "/learn/art/optimized/6ddb12ca11b4180d7cd58a6453b8d6ca942054401a5803fc3c2f3884edf895c6.webp": {
+    "url": "/learn/art/optimized/6ddb12ca11b4180d7cd58a6453b8d6ca942054401a5803fc3c2f3884edf895c6.webp",
+    "width": 1056,
+    "height": 1056,
+    "bytes": 83226,
+    "sha256": "6ddb12ca11b4180d7cd58a6453b8d6ca942054401a5803fc3c2f3884edf895c6"
+  },
+  "/learn/art/optimized/81a2226bd28116af160d9df677d1b16fcba6ea891206a1524fd50bc114419dcf.webp": {
+    "url": "/learn/art/optimized/81a2226bd28116af160d9df677d1b16fcba6ea891206a1524fd50bc114419dcf.webp",
+    "width": 1056,
+    "height": 1056,
+    "bytes": 144936,
+    "sha256": "81a2226bd28116af160d9df677d1b16fcba6ea891206a1524fd50bc114419dcf"
+  }
+}

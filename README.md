@@ -6,7 +6,7 @@
 
 A self-hostable, Chinese-first learning app that turns a difficult concept into a fable, then connects the story back to the underlying ideas.
 
-[![Check](https://github.com/bigWhiteTofu/FableLab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bigWhiteTofu/FableLab/actions/workflows/ci.yml)
+[![Local tests: 53 passed](https://img.shields.io/badge/local_tests-53_passed-315b49)](docs/VALIDATION.md)
 [![MIT](https://img.shields.io/badge/license-MIT-315b49)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-24%2B-315b49)](https://nodejs.org/)
 
@@ -27,6 +27,8 @@ A self-hostable, Chinese-first learning app that turns a difficult concept into 
 FableLab also includes a private bookshelf, account recovery codes, and read-only snapshot links you can revoke. Generation checkpoints persist across refreshes and server restarts; bounded retries continue unfinished stages and missing illustrations.
 
 This is a learning app prototype. Its educational effects have not been formally evaluated. Generated references remain marked unverified, and machine review does not replace subject-matter review.
+
+[Validation record](docs/VALIDATION.md): local tests, build and mock flows passed. Hosted GitHub Actions has not completed successfully for this preview.
 
 ## Quick start: no API key
 

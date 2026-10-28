@@ -1,4 +1,4 @@
-import type { AccessResponse, AuthResponse, JobDTO, JobResponse, JobsResponse, LearningFormat, PublicShareResponse, SessionResponse, ShareResponse, StoryLength } from '../shared/contracts';
+import type { AccessResponse, AuthResponse, JobDTO, JobResponse, JobsResponse, LibraryResponse, LearningFormat, PublicShareResponse, SessionResponse, ShareResponse, StoryLength } from '../shared/contracts';
 import { newestBooks } from './books';
 
 export class ApiError extends Error {
@@ -37,6 +37,7 @@ export const api = {
   access: () => request<AccessResponse>('/access'),
   unlock: (code: string) => request<AccessResponse>('/access', { code }),
   jobs: () => request<JobsResponse>('/jobs'),
+  library: () => request<LibraryResponse>('/library'),
   job: (id: string) => request<JobResponse>(`/jobs/${encodeURIComponent(id)}`),
   create: (concept: string, format: LearningFormat, clientRequestId: string, storyLength: StoryLength = 'standard') => request<JobResponse>('/jobs', { concept, format, clientRequestId, storyLength }),
   action: (id: string, action: 'pause' | 'resume') => request<JobResponse>(`/jobs/${encodeURIComponent(id)}/${action}`, {}),

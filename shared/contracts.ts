@@ -47,6 +47,10 @@ export interface AccessResponse { unlocked: boolean; }
 export interface CreateJobRequest { concept: string; format: LearningFormat; clientRequestId: string; storyLength?: StoryLength; }
 export interface JobResponse { job: JobDTO; }
 export interface JobsResponse { jobs: JobDTO[]; }
+export interface LibraryBookDTO extends Pick<JobDTO, 'id' | 'concept' | 'format' | 'status' | 'phase' | 'createdAt' | 'updatedAt' | 'progress' | 'error' | 'quality' | 'provenance'> {
+  title: string; opening: string; coverUrl?: string;
+}
+export interface LibraryResponse { username: string; books: LibraryBookDTO[]; }
 export interface UserDTO { username: string; displayName: string; }
 export interface SessionResponse { user: UserDTO | null; legacyImportCount: number; }
 export interface AuthResponse extends SessionResponse { recoveryCode?: string; }

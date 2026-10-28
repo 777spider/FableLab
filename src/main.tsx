@@ -2,7 +2,8 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import * as Collapsible from '@radix-ui/react-collapsible';
-import type { JobDTO, LearningFormat, SessionResponse, ShareDTO, SharedModuleDTO, StoryLength, TaskDTO, UserDTO } from '../shared/contracts';
+import type { JobDTO, LibraryBookDTO, LearningFormat, SessionResponse, ShareDTO, SharedModuleDTO, StoryLength, TaskDTO, UserDTO } from '../shared/contracts';
+import { navigateWithinApp } from './navigation';
 import { api, ApiError, upsert } from './api';
 import { newestBooks } from './books';
 import { reconnectable, watchRead } from './connection';
@@ -53,7 +54,7 @@ function Header({ user = null, current, publicOnly = false, onLogout }: { user?:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function logout() { if (busy || !onLogout) return; setBusy(true); setError(''); try { await onLogout(); } catch (e) { setError(publicMessage(e)); } finally { setBusy(false); } }
-  return <header className="masthead"><Wordmark /><nav aria-label="主导航"><a className="nav-home" href="/in" aria-current={current === 'home' ? 'page' : undefined}>首页</a>{!publicOnly && <a href="/learn/library" aria-current={current === 'library' ? 'page' : undefined}>我的书架</a>}<a className="nav-start" href="/learn" aria-current={current === 'studio' ? 'page' : undefined}>开始学习 <Arrow /></a>{!publicOnly && (user ? <details className="account-menu"><summary>{user.displayName || user.username}</summary><div className="account-menu-content"><button type="button" disabled={busy} onClick={() => void logout()}>{busy ? '正在退出…' : '退出登录'}</button>{error && <p role="alert">{error}</p>}</div></details> : <a href={authURL()}>登录</a>)}</nav></header>;
+  return <header className="masthead"><Wordmark /><nav aria-label="主导航"><a className="nav-home" href="/in" aria-current={current === 'home' ? 'page' : undefined}>首页</a>{!publicOnly && <a href="/learn/library" onClick={user ? navigateWithinApp : undefined} aria-current={current === 'library' ? 'page' : undefined}>我的书架</a>}<a className="nav-start" href="/learn" onClick={user ? navigateWithinApp : undefined} aria-current={current === 'studio' ? 'page' : undefined}>开始学习 <Arrow /></a>{!publicOnly && (user ? <details className="account-menu"><summary>{user.displayName || user.username}</summary><div className="account-menu-content"><button type="button" disabled={busy} onClick={() => void logout()}>{busy ? '正在退出…' : '退出登录'}</button>{error && <p role="alert">{error}</p>}</div></details> : <a href={authURL()}>登录</a>)}</nav></header>;
 }
 
 function Home() {
@@ -204,17 +205,24 @@ function PageLoading() { return <main id="main" className="public-reading"><sect
 
 type ShelfReturn = { x: number; y: number; bookId: string };
 
-function LibraryController({ user, legacyCount, onSession, onAuthLost, onOpenBook, restorePosition }: { user: UserDTO; legacyCount: number; onSession: (state: SessionResponse) => void; onAuthLost: () => void; onOpenBook: (job: JobDTO) => void; restorePosition: ShelfReturn | null }) {
-  const [jobs, setJobs] = useState<JobDTO[]>([]);
+function LibraryController({ user, legacyCount, onSession, onAuthLost, onOpenBook, restorePosition, cachedBooks, onLoaded }: { user: UserDTO; legacyCount: number; onSession: (state: SessionResponse) => void; onAuthLost: () => void; onOpenBook: (job: JobDTO) => void; restorePosition: ShelfReturn | null; cachedBooks: LibraryBookDTO[] | null; onLoaded: (books: LibraryBookDTO[]) => void }) {
+  const [jobs, setJobs] = useState<LibraryBookDTO[]>(cachedBooks || []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [importing, setImporting] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const alive = useRef(true);
+  const openingBook = useRef(false);
+  const restored = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
     setLoading(true); setError('');
-    return watchRead(api.jobs, {
-      receive: result => { setJobs(result.jobs); setLoading(false); setError(''); },
+    return watchRead(api.library, {
+      receive: result => {
+        if (result.username !== user.username) throw new ApiError('登录已变更，请重新连接。', 401, 'AUTH_REQUIRED');
+        setJobs(result.books); onLoaded(result.books); setLoading(false); setError('');
+      },
       failed: error => {
         setLoading(false);
         if (authRequired(error)) { setJobs([]); onAuthLost(); return false; }
@@ -224,14 +232,31 @@ function LibraryController({ user, legacyCount, onSession, onAuthLost, onOpenBoo
     });
   }, [user.username, refresh]);
   useEffect(() => {
-    if (loading || !restorePosition) return;
+    if ((loading && !jobs.length) || !restorePosition || restored.current) return;
     const frame = requestAnimationFrame(() => {
       const book = Array.from(document.querySelectorAll<HTMLAnchorElement>('.library-book')).find(link => link.dataset.bookId === restorePosition.bookId);
+      if (!book) return;
+      restored.current = true;
       book?.focus({ preventScroll: true });
       window.scrollTo({ left: restorePosition.x, top: restorePosition.y, behavior: 'auto' });
     });
     return () => cancelAnimationFrame(frame);
-  }, [loading, restorePosition]);
+  }, [loading, jobs.length, restorePosition]);
+  async function openBook(book: LibraryBookDTO) {
+    if (openingBook.current) return;
+    openingBook.current = true;
+    setError('');
+    try {
+      const preset = libraryPresets.find(job => job.id === book.id);
+      const job = preset || (await api.job(book.id)).job;
+      if (alive.current) onOpenBook(job);
+    } catch (error) {
+      if (alive.current) { if (authRequired(error)) onAuthLost(); else setError(publicMessage(error)); }
+      throw error;
+    } finally {
+      openingBook.current = false;
+    }
+  }
   async function importRecords() {
     if (importing) return;
     setImporting(true); setError(''); setNotice('');
@@ -239,7 +264,7 @@ function LibraryController({ user, legacyCount, onSession, onAuthLost, onOpenBoo
     catch (e) { if (authRequired(e)) onAuthLost(); else setError(publicMessage(e)); }
     finally { setImporting(false); }
   }
-  return <><LibraryView jobs={jobs} loading={loading} error={error} legacyCount={legacyCount} importing={importing} onImport={() => void importRecords()} onRetry={() => setRefresh(value => value + 1)} onOpenBook={onOpenBook} />{notice && <p className="library-import-notice" role="status">{notice}</p>}</>;
+  return <><LibraryView jobs={jobs} loading={loading} error={error} legacyCount={legacyCount} importing={importing} onImport={() => void importRecords()} onRetry={() => setRefresh(value => value + 1)} onOpenBook={openBook} />{notice && <p className="library-import-notice" role="status">{notice}</p>}</>;
 }
 
 function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { user: UserDTO | null; onAuthLost: () => void; initialJob?: JobDTO | null; bookArrival?: boolean }) {
@@ -418,7 +443,7 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
       {job && <Progress job={job} busy={busy} offline={offline} onAction={performAction} />}
       {offline && !job && <p className="form-error" role="status">当前离线。恢复连接后可以继续生成。</p>}
       {error && <div className="workspace-error" role="alert"><p>{error}</p><button type="button" onClick={() => setError('')}>收起</button></div>}
-      {user ? <section className="bookshelf"><div className="shelf-heading"><h2><a href="/learn/library">我的书架 <Arrow /></a></h2><span>{jobs.length + libraryPresets.length}</span></div><div className="shelf-list">{newestBooks([...libraryPresets, ...jobs.filter(item => !isDemo(item))]).slice(0, 5).map((item, i) => <button type="button" key={item.id} className={`shelf-item ${job?.id === item.id ? 'selected' : ''}`} disabled={busy || shareBusy} onClick={() => openJob(item)}><span className="shelf-index">{String(i + 1).padStart(2, '0')}</span><span><strong>{item.stories[0]?.title || item.concept}</strong><small>{bookCreationDate(item.createdAt)}{item.format === 'comic' ? ' 作画' : ' 写下'}{item.status !== 'completed' && ` · ${label(item)}`}</small></span><span aria-hidden="true">↗</span></button>)}</div></section> : <p className="guest-compose-note"><a href={authURL('register')}>创建自己的书架</a>，故事下次接着读。</p>}
+      {user ? <section className="bookshelf"><div className="shelf-heading"><h2><a href="/learn/library" onClick={navigateWithinApp}>我的书架 <Arrow /></a></h2><span>{jobs.length + libraryPresets.length}</span></div><div className="shelf-list">{newestBooks([...libraryPresets, ...jobs.filter(item => !isDemo(item))]).slice(0, 5).map((item, i) => <button type="button" key={item.id} className={`shelf-item ${job?.id === item.id ? 'selected' : ''}`} disabled={busy || shareBusy} onClick={() => openJob(item)}><span className="shelf-index">{String(i + 1).padStart(2, '0')}</span><span><strong>{item.stories[0]?.title || item.concept}</strong><small>{bookCreationDate(item.createdAt)}{item.format === 'comic' ? ' 作画' : ' 写下'}{item.status !== 'completed' && ` · ${label(item)}`}</small></span><span aria-hidden="true">↗</span></button>)}</div></section> : <p className="guest-compose-note"><a href={authURL('register')}>创建自己的书架</a>，故事下次接着读。</p>}
       <button type="button" className="workspace-demo" onClick={() => accept({ ...preset, format: composeFormat })} disabled={busy || shareBusy}>预置示例《雾港渡船》 <Arrow /></button>
     </aside>
     {job ? <Collapsible.Root open={sharing} onOpenChange={changeShareOpen} asChild><div className={`reading-workspace ${sharing ? 'with-share' : ''}`}><Reader key={job.id} job={job} format={format} busy={busy} onFormat={changeFormat} onAction={performAction} storageScope={isDemo(job) ? 'preset' : username} bookArrival={bookArrival} shareControl={user && !isDemo(job) ? <Collapsible.Trigger asChild><button ref={shareTrigger} type="button" className="reader-share-button" disabled={shareBusy}>分享</button></Collapsible.Trigger> : undefined} /><Collapsible.Content ref={shareContent} className="share-disclosure"><SharePanel job={job} share={share} known={shareKnown} loading={shareLoading || (!shareKnown && !shareError)} busy={shareBusy} error={shareError} notice={shareNotice} onCreate={() => void changeSharing('publish')} onRevoke={() => void changeSharing('revoke')} onReload={() => { setShareError(''); setShareKnown(false); setShareRefresh(value => value + 1); }} onClose={() => changeShareOpen(false)} /></Collapsible.Content></div></Collapsible.Root> : <div className="reading-workspace"><Welcome format={composeFormat} onDemo={() => accept({ ...preset, format: composeFormat })} /></div>}
@@ -486,6 +511,7 @@ function SessionApp() {
   const preview = new URLSearchParams(location.search).get('preview') === 'share';
   const [session, setSession] = useState<SessionResponse>({ user: null, legacyImportCount: 0 });
   const sessionOwner = useRef<string | null>(null);
+  const libraryCache = useRef<{ owner: string; books: LibraryBookDTO[] } | null>(null);
   const sessionRevision = useRef(0);
   const [checking, setChecking] = useState(true);
   const [sessionError, setSessionError] = useState('');
@@ -500,6 +526,7 @@ function SessionApp() {
   function receiveSession(next: SessionResponse) {
     const owner = next.user?.username || null;
     if (sessionOwner.current !== owner) {
+      libraryCache.current = null;
       cancelBookTransition(); setOpenedBook(null); setBookArrival(false); setShelfReturn(null); setRecovery(null);
       if (sessionOwner.current) clearPrivateStorage();
       sessionOwner.current = owner;
@@ -566,7 +593,7 @@ function SessionApp() {
   if (preview && session.user && !checking) return <OwnerPreviewPage key={session.user.username} user={session.user} onAuthLost={authLost} />;
   return <><Header user={session.user} current={home ? 'home' : library ? 'library' : !auth ? 'studio' : undefined} onLogout={logout} />
     {sessionError && <div className="account-banner" role="status">{sessionError}<button type="button" onClick={() => setRefresh(value => value + 1)}>重新连接</button></div>}
-    {recovery ? <RecoveryPage code={recovery.code} username={recovery.username} returnTo={recovery.returnTo} /> : home ? <Home /> : auth ? <AuthController onSession={receiveSession} onRecovery={setRecovery} /> : checking ? <PageLoading /> : (library || preview) && !session.user ? <PrivateEntry expired={expired} /> : library && session.user ? <LibraryController key={session.user.username} user={session.user} legacyCount={session.legacyImportCount} onSession={receiveSession} onAuthLost={authLost} onOpenBook={openBook} restorePosition={shelfReturn} /> : <Studio key={`${session.user?.username || 'guest'}:${route}`} user={session.user} onAuthLost={authLost} initialJob={openedBook && openedBook.owner === session.user?.username ? openedBook.job : null} bookArrival={bookArrival} />}
+    {recovery ? <RecoveryPage code={recovery.code} username={recovery.username} returnTo={recovery.returnTo} /> : home ? <Home /> : auth ? <AuthController onSession={receiveSession} onRecovery={setRecovery} /> : checking ? <PageLoading /> : (library || preview) && !session.user ? <PrivateEntry expired={expired} /> : library && session.user ? <LibraryController key={session.user.username} user={session.user} legacyCount={session.legacyImportCount} onSession={receiveSession} onAuthLost={authLost} onOpenBook={openBook} restorePosition={shelfReturn} cachedBooks={libraryCache.current?.owner === session.user.username ? libraryCache.current.books : null} onLoaded={books => { if (sessionOwner.current === session.user?.username) libraryCache.current = { owner: session.user.username, books }; }} /> : <Studio key={`${session.user?.username || 'guest'}:${route}`} user={session.user} onAuthLost={authLost} initialJob={openedBook && openedBook.owner === session.user?.username ? openedBook.job : null} bookArrival={bookArrival} />}
   </>;
 }
 

@@ -10,7 +10,7 @@ import {AuthService} from '../../server/auth.ts';
 import {ShareService} from '../../server/share.ts';
 import {JobService} from '../../server/jobs.ts';
 import {SyntheticProvider} from '../../server/synthetic.ts';
-import type {AuthResponse, JobResponse, SessionResponse, ShareResponse, PublicShareResponse} from '../../shared/contracts.ts';
+import type {AuthResponse, JobResponse, LibraryResponse, SessionResponse, ShareResponse, PublicShareResponse} from '../../shared/contracts.ts';
 
 const password = 'a local synthetic passphrase 2026';
 function removeFixture(directory: string) {
@@ -95,6 +95,33 @@ test('foreign origins cannot mutate; a different account cannot read or mutate a
     const malformed = await fetch(s.url + '/learn/api/jobs', {method: 'POST', headers: {'Content-Type': 'application/json', Cookie: a.cookie}, body: '{"concept":'});
     assert.equal(malformed.status, 400); assert.equal(JSON.stringify(await malformed.json()).includes('SyntaxError'), false);
   } finally {await s.close();}
+});
+
+test('lightweight library stays account-scoped, bounds previews and leaves full detail and saved data intact', async () => {
+  const s = await setup();
+  try {
+    assert.equal((await fetch(s.url + '/learn/api/library')).status, 401);
+    const a = await register(s.url, 'library_a'), b = await register(s.url, 'library_b');
+    const owner = s.auth.authenticate(a.cookie.split('=')[1])!.owner;
+    const created = s.jobs.create(owner, {concept: '协作', format: 'text', storyLength: 'long', clientRequestId: 'library-preview-01'});
+    const job = await completed(s.jobs, owner, created.id);
+    const saved = readFileSync(join(s.dataDir, 'jobs.json'));
+    const response = await fetch(s.url + '/learn/api/library', {headers: {Cookie: a.cookie}});
+    assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+    const summary = await response.json() as LibraryResponse;
+    assert.equal(summary.username, 'library_a'); assert.equal(summary.books.length, 1);
+    assert.equal(summary.books[0].id, job.id); assert.equal(summary.books[0].title, job.stories[0].title);
+    assert.ok(summary.books[0].opening.startsWith(job.stories[0].paragraphs[0].text.slice(0, 40)));
+    assert.ok(Array.from(summary.books[0].opening).length <= 181);
+    for (const field of ['stories', 'knowledge', 'lesson', 'discussion', 'tasks']) assert.equal(field in summary.books[0], false);
+    const detail = await (await fetch(s.url + '/learn/api/jobs/' + job.id, {headers: {Cookie: a.cookie}})).json() as JobResponse;
+    assert.ok(detail.job.stories[0].pages.length >= 8); assert.ok(detail.job.lesson);
+    assert.ok(Buffer.byteLength(JSON.stringify(summary)) < Buffer.byteLength(JSON.stringify({jobs: [detail.job]})) * .2);
+    assert.deepEqual(await (await fetch(s.url + '/learn/api/library?owner=' + owner, {headers: {Cookie: b.cookie}})).json(), {username: 'library_b', books: []});
+    assert.deepEqual(readFileSync(join(s.dataDir, 'jobs.json')), saved);
+    await post(s.url, '/auth/logout', {}, a.cookie);
+    assert.equal((await fetch(s.url + '/learn/api/library', {headers: {Cookie: a.cookie}})).status, 401);
+  } finally { await s.close(); }
 });
 
 test('Unicode SPA auth/library routes work and unrelated routes remain unavailable', async () => {

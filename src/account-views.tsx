@@ -1,8 +1,10 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { JobDTO, ShareDTO } from '../shared/contracts';
+import type { JobDTO, LibraryBookDTO, ShareDTO } from '../shared/contracts';
+import { libraryBook } from '../shared/library';
+import { navigateWithinApp } from './navigation';
 import { forestArt, lighthouseArt } from './art';
 import { libraryPresets, presetURL } from './preset';
-import { bookCoverDesign, newestBooks, openingExcerpt } from './books';
+import { bookCoverDesign, newestBooks } from './books';
 
 export type AuthView = 'login' | 'register' | 'recover';
 export type AuthFields = { username: string; password: string; invitationCode: string; recoveryCode: string };
@@ -77,7 +79,7 @@ export function RecoveryPage({ code, username, returnTo }: { code: string; usern
   return <main id="main" className="recovery-page"><div className="recovery-emblem" aria-hidden="true">f.</div><h1>先收好这把钥匙。</h1><p>忘记密码时，用它找回书架。恢复码只在此展示一次。</p><section className="recovery-code" aria-label="恢复码"><span>{username}</span><code>{code}</code><div><button type="button" onClick={copy}>{copied ? '已复制' : '复制恢复码'}</button><button type="button" onClick={download}>保存到文件</button></div></section>{copyError && <p className="form-error" role="status">{copyError}</p>}<label className="saved-code"><input type="checkbox" checked={saved} onChange={e => setSaved(e.target.checked)} />我已妥善保存恢复码</label><a className={`button primary ${!saved ? 'disabled-link' : ''}`} href={saved ? returnTo : undefined} aria-disabled={!saved} tabIndex={saved ? 0 : -1}>继续 <Arrow /></a></main>;
 }
 
-function currentStatus(job: JobDTO) {
+function currentStatus(job: Pick<JobDTO, 'status' | 'progress' | 'error'>) {
   if (job.status === 'paused') return '已暂停';
   if (job.status === 'failed') return job.error?.recoverable === false ? '生成中断' : '等待继续';
   if (job.status === 'running' || job.status === 'queued') return job.progress.stageLabel || '正在生成';
@@ -90,10 +92,10 @@ export function bookCreationDate(value: string): string {
 }
 
 export function LibraryView({ jobs, loading, error, legacyCount, importing, onImport, onRetry, onOpenBook }: {
-  jobs: JobDTO[]; loading: boolean; error: string; legacyCount: number; importing: boolean;
-  onImport: () => void; onRetry: () => void; onOpenBook: (job: JobDTO) => void;
+  jobs: LibraryBookDTO[]; loading: boolean; error: string; legacyCount: number; importing: boolean;
+  onImport: () => void; onRetry: () => void; onOpenBook: (book: LibraryBookDTO) => Promise<void>;
 }) {
-  const books = newestBooks([...libraryPresets, ...jobs.filter(job => !libraryPresets.some(example => example.id === job.id))]);
+  const books = newestBooks([...libraryPresets.map(libraryBook), ...jobs.filter(job => !libraryPresets.some(example => example.id === job.id))]);
   const [openingId, setOpeningId] = useState('');
   const opening = useRef<{ animations: Animation[]; timer: number; navigating: boolean } | null>(null);
   useEffect(() => {
@@ -105,14 +107,14 @@ export function LibraryView({ jobs, loading, error, legacyCount, importing, onIm
     window.addEventListener('pageshow', reset); window.addEventListener('pagehide', reset);
     return () => { window.removeEventListener('pageshow', reset); window.removeEventListener('pagehide', reset); cancel(); };
   }, []);
-  function openBook(event: React.MouseEvent<HTMLAnchorElement>, job: JobDTO) {
+  function openBook(event: React.MouseEvent<HTMLAnchorElement>, job: LibraryBookDTO) {
     const link = event.currentTarget;
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.hasAttribute('download') || (link.target && link.target !== '_self')) return;
     if (opening.current) { event.preventDefault(); return; }
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { event.preventDefault(); onOpenBook(job); return; }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { event.preventDefault(); void onOpenBook(job).catch(() => {}); return; }
     const cover = link.querySelector<HTMLElement>('.book-cover');
     const face = link.querySelector<HTMLElement>('.book-cover-face');
-    if (!cover?.animate || !face?.animate) { event.preventDefault(); onOpenBook(job); return; }
+    if (!cover?.animate || !face?.animate) { event.preventDefault(); void onOpenBook(job).catch(() => {}); return; }
     const animations: Animation[] = [];
     try {
       const timing: KeyframeAnimationOptions = { duration: 170, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'forwards' };
@@ -124,7 +126,11 @@ export function LibraryView({ jobs, loading, error, legacyCount, importing, onIm
         if (opening.current !== pending || pending.navigating) return;
         pending.navigating = true; window.clearTimeout(pending.timer);
         cover.style.viewTransitionName = 'fable-open-book';
-        onOpenBook(job);
+        void onOpenBook(job).catch(() => {
+          if (opening.current !== pending) return;
+          pending.animations.forEach(animation => animation.cancel());
+          cover.style.viewTransitionName = ''; opening.current = null; setOpeningId('');
+        });
       };
       pending.timer = window.setTimeout(navigate, 190);
       opening.current = pending;
@@ -133,10 +139,10 @@ export function LibraryView({ jobs, loading, error, legacyCount, importing, onIm
     } catch {
       if (opening.current?.animations === animations) { window.clearTimeout(opening.current.timer); opening.current = null; }
       animations.forEach(animation => animation.cancel());
-      event.preventDefault(); onOpenBook(job);
+      event.preventDefault(); void onOpenBook(job).catch(() => {});
     }
   }
-  return <main id="main" className="library-page"><div className="library-heading"><h1>我的书架<span>{books.length}</span></h1><a className="button primary" href="/learn">新故事 <Arrow /></a></div>
+  return <main id="main" className="library-page"><div className="library-heading"><h1>我的书架<span>{books.length}</span></h1><a className="button primary" href="/learn" onClick={navigateWithinApp}>新故事 <Arrow /></a></div>
     {legacyCount > 0 && <section className="legacy-import"><p>这台浏览器里，还有{legacyCount}份以前的阅读记录。</p><button type="button" disabled={importing} onClick={onImport}>{importing ? '正在导入…' : '导入本机记录'} <Arrow /></button></section>}
     {error && <div className="library-error" role="alert"><p>{error}</p><button type="button" onClick={onRetry}>重新连接</button></div>}
     {books.length > 0 ? <div className="book-grid" aria-busy={loading || undefined}>{books.map((job, index) => <LibraryBook key={job.id} job={job} index={index} opening={openingId === job.id} onOpen={openBook} />)}</div> : loading ? <div className="book-grid book-grid-loading" aria-label="正在加载书架" aria-busy="true">{[0, 1, 2].map(n => <div className="book-placeholder" key={n}><div /><span /></div>)}</div> : <div className="empty-library"><figure><img {...forestArt} alt="森林里，动物们正围坐着观察彼此。" /></figure><div><h2>书架还空着，<br />好奇心已经到了。</h2><a href="/learn">从一个概念开始 <Arrow /></a><a className="empty-demo" href="/learn?demo=1">或先翻翻《雾港渡船》</a></div></div>}
@@ -186,16 +192,16 @@ function CoverExcerpt({ excerpt }: { excerpt: string }) {
   return <div className="book-excerpt-space" ref={area}><p className="book-excerpt" ref={text}>{excerpt || '故事正在成篇。'}</p></div>;
 }
 
-function LibraryBook({ job, index, opening, onOpen }: { job: JobDTO; index: number; opening: boolean; onOpen: (event: React.MouseEvent<HTMLAnchorElement>, job: JobDTO) => void }) {
+function LibraryBook({ job, index, opening, onOpen }: { job: LibraryBookDTO; index: number; opening: boolean; onOpen: (event: React.MouseEvent<HTMLAnchorElement>, job: LibraryBookDTO) => void }) {
   const [failedCover, setFailedCover] = useState(false);
-  const cover = job.format === 'comic' && !failedCover && job.stories.flatMap(s => s.pages).find(p => p.image.status === 'ready' && p.image.url)?.image.url;
-  const title = job.stories[0]?.title || job.concept;
+  const cover = job.format === 'comic' && !failedCover && job.coverUrl;
+  const title = job.title;
   const status = currentStatus(job);
   const shape = ['tall', 'compact', 'medium'][index % 3];
   const design = bookCoverDesign(job.id);
   const date = bookCreationDate(job.createdAt);
   const href = job.provenance === 'preset' ? presetURL(job) : `/learn?${new URLSearchParams({ job: job.id, mode: job.format })}`;
-  return <a className={`library-book book-${shape} ${cover ? 'has-cover' : 'paper-cover'} cover-${design.tone} ${opening ? 'is-opening' : ''}`} data-book-id={job.id} href={href} onClick={event => onOpen(event, job)}><div className="book-cover" aria-hidden="true"><div className="book-pages" /><div className="book-cover-face">{cover ? <img src={cover} alt="" loading="lazy" onError={() => setFailedCover(true)} /> : <div className="type-cover"><span className="cover-imprint">fablelab.</span><CoverPrint motif={design.motif} /><CoverExcerpt excerpt={openingExcerpt(job)} /></div>}{date && <time className="book-date" dateTime={job.createdAt}>{date} {job.format === 'comic' ? '作画' : '写下'}</time>}<span className="book-open">翻开 ↗</span></div></div><div className="book-details"><h2>{title}</h2><p>{job.concept}{status && <span>{status}</span>}</p></div></a>;
+  return <a className={`library-book book-${shape} ${cover ? 'has-cover' : 'paper-cover'} cover-${design.tone} ${opening ? 'is-opening' : ''}`} data-book-id={job.id} href={href} onClick={event => onOpen(event, job)}><div className="book-cover" aria-hidden="true"><div className="book-pages" /><div className="book-cover-face">{cover ? <img src={cover} alt="" loading="lazy" onError={() => setFailedCover(true)} /> : <div className="type-cover"><span className="cover-imprint">fablelab.</span><CoverPrint motif={design.motif} /><CoverExcerpt excerpt={job.opening} /></div>}{date && <time className="book-date" dateTime={job.createdAt}>{date} {job.format === 'comic' ? '作画' : '写下'}</time>}<span className="book-open">翻开 ↗</span></div></div><div className="book-details"><h2>{title}</h2><p>{job.concept}{status && <span>{status}</span>}</p></div></a>;
 }
 
 export function SharePanel({ job, share, known, loading, busy, error, notice, onCreate, onRevoke, onReload, onClose }: {

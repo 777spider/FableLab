@@ -62,7 +62,7 @@ export function presetForDemo(value: string | null): JobDTO | null {
   return value === '1' ? preset : value === 'education-xai' ? educationPreset : null;
 }
 
-export function presetURL(job: JobDTO): string {
+export function presetURL(job: Pick<JobDTO, 'id' | 'format'>): string {
   const demo = job.id === educationPreset.id ? 'education-xai' : '1';
   return `/learn?${new URLSearchParams({ demo, mode: job.format })}`;
 }

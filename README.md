@@ -30,7 +30,7 @@ Text generation offers **Standard** and optional **Long**. A long story develops
 
 Every bookshelf includes two ready-to-read examples: *Fog Harbor Ferry* (simulation, illustrated) and *The Last Slip of Paper* (explainable AI in education, text). New books appear first by creation date. Text covers preview the story opening, with the title below; comic covers retain their artwork. Opening a book gives it a brief lift and cover turn into the reader; reduced-motion preferences keep navigation immediate. Creation dates sit in small type at the lower left of each cover. Complete native Chinese fonts render immediately: sans for prose and controls, serif for titles, with no font downloads. Historical open-source font files and licenses are retained; see [font details](docs/FONTS.md).
 
-The 2026-10-28 source update is newer than the live demo: the independent service deployment stopped at a failed SSH preflight, before staging or switching the running release.
+The live demo was updated on 2026-10-28 with the revised covers, native reading fonts and faster bookshelf loading. The shelf fetches cover summaries and reuses its current account's in-memory list while checking for updates; ordinary shelf navigation keeps the current page. See [bookshelf performance](docs/SHELF_PERFORMANCE.md).
 
 Text covers now pair story openings with original geometric prints on four muted paper colors. Their identity stays fixed across refreshes and shelf reordering. See the [cover design, open-source references and actual local preview](docs/COVER_DESIGN.md).
 

@@ -1,6 +1,7 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {mkdirSync,readFileSync,writeFileSync,renameSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
+import {libraryBook} from '../shared/library.ts';
 import type {CreateJobRequest,JobPhase,LearningFormat,KnowledgeDTO,JobDTO,JobRetryDTO} from '../shared/contracts.ts';
 import {GenerationError,CandidateError,knowledgeSchema,parse,validateStory,validateLesson,validateReview,freshReviewInput,projectStory,type GenerationProvider,type StoryWire,type LessonWire,type Review,type GenerationInput} from './generation.ts';
 export {GenerationError} from './generation.ts';
@@ -25,6 +26,7 @@ export class JobService {
  private dto(r:RecordJob){const value=structuredClone(r.dto);value.storyCount=this.storyCount(r);value.storyLength??='standard';value.progress.elapsedMs=(['queued','running'].includes(value.status)?Date.now():Date.parse(value.updatedAt))-Date.parse(value.createdAt);const retry=r.dto.status==='queued'?r.retry:undefined;value.progress.retry=retry?{attempt:retry.attempt,nextAttemptAt:retry.nextAttemptAt,reason:retry.reason}:null;return value;}
  get(owner:string,id:string){const r=this.records.find(r=>r.owner===owner&&r.dto.id===id);return r?this.dto(r):null;}
  list(owner:string){return this.records.filter(r=>r.owner===owner).sort((a,b)=>b.dto.createdAt.localeCompare(a.dto.createdAt)).map(r=>this.dto(r));}
+ library(owner:string){return this.records.filter(r=>r.owner===owner).sort((a,b)=>b.dto.createdAt.localeCompare(a.dto.createdAt)).map(r=>libraryBook(r.dto));}
  create(owner:string,request:CreateJobRequest){
   const storyLength=request.storyLength??'standard';
   if(storyLength==='long'&&request.format!=='text')throw new GenerationError('LONG_TEXT_ONLY');

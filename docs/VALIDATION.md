@@ -2,6 +2,14 @@
 
 Initial preview checked locally on 2026-10-26 with Node.js 24.19.0 and npm 11.17.0. The bookshelf and optional long-text updates below were checked on 2026-10-27.
 
+## Deployed covers and faster bookshelf: 2026-10-28
+
+The independent live service now serves the new cover art, complete native fonts and a lightweight authenticated library endpoint. The public checkout passed **87 tests** and its build. The deployed Studio candidate passed **85 tests** and builds locally and on Linux, with 26 deployment simulations and the package-order check passing on Linux without skips. All 301 application files were checked against the frozen package, and the 126 frontend files were downloaded and compared byte for byte before switching the service.
+
+The hosted build passed **40 browser checks** without application errors. Real anonymous checks covered the lightweight endpoint's 401/no-store boundary, both built-in cases, zero font downloads, explanation/discussion, comic artwork and mobile overflow. Isolated GET mocks covered all cover styles, private book reading, Back/focus, reduced motion, cached navigation before the background response and account mismatch cleanup. Warm mocked shelf navigation took 55–62ms; this is not an authenticated production loading benchmark. No production accounts, stories or model requests were created for these tests. See [bookshelf performance](SHELF_PERFORMANCE.md).
+
+Post-deployment checks verified the installed source/process, unchanged saved job bytes and account/session/share records, and unchanged fingerprints for 28 protected databases, 10 legacy HTTP paths and unrelated services/configuration. The checks below describe earlier checkpoints; their then-pending deployment statements are historical.
+
 ## Literary cover art: 2026-10-28
 
 The public checkout passed all **86 tests** and `npm run build`; Studio passed all 84 tests and its build. The four cover-related source files match across the checkouts. No dependencies or bundled font files changed.

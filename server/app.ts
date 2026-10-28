@@ -141,6 +141,10 @@ export function createApp(service: JobService, config: AppConfig, {auth, shares}
     if (!path) return void fail(res, 404, 'MEDIA_NOT_FOUND', '这张插画暂不可用。');
     res.sendFile(basename(path), {root: dirname(path), cacheControl: false});
   });
+  app.get('/learn/api/library', gate, (_req, res) => {
+    const books = (res.locals.owners as string[]).flatMap(owner => service.library(owner)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    res.json({username: (res.locals.account as AccountIdentity).user.username, books});
+  });
   app.use('/learn/api/jobs', gate);
   app.get('/learn/api/jobs', (_req, res) => {
     const jobs = (res.locals.owners as string[]).flatMap(owner => service.list(owner)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));

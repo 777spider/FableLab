@@ -32,6 +32,8 @@ Every bookshelf includes two ready-to-read examples: *Fog Harbor Ferry* (simulat
 
 The 2026-10-28 source update is newer than the live demo: the independent service deployment stopped at a failed SSH preflight, before staging or switching the running release.
 
+Text covers now pair story openings with original geometric prints on four muted paper colors. Their identity stays fixed across refreshes and shelf reordering. See the [cover design, open-source references and actual local preview](docs/COVER_DESIGN.md).
+
 This is a learning app prototype. Its educational effects have not been formally evaluated. Generated references remain marked unverified, and machine review does not replace subject-matter review.
 
 [Validation record](docs/VALIDATION.md): local tests, build and mock flows passed. Hosted GitHub Actions also passed installation, tests and the production build.

@@ -69,10 +69,21 @@
 .library-book.is-opening { z-index: 2; }
 .library-book.is-opening .book-cover { transition: none; }
 .book-cover { container-type: inline-size; }
-.book-cover-face .type-cover { display: flex; flex-direction: column; height: 100%; padding: 26px clamp(16px, 12cqi, 30px) 38px; color: var(--sheet); background: var(--green); }
-.type-cover > span { font: 17px/1.2 Georgia, serif; padding-bottom: 20px; border-bottom: 1px solid oklch(83% .03 124 / .5); }
-.book-excerpt-space { flex: 1; min-height: 0; margin: 20px 0 15px; overflow: hidden; }
-.type-cover .book-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--cover-excerpt-lines, 7); font: clamp(.875rem, 7.4cqi, 1rem)/1.85 var(--reading-font); font-weight: 400; margin: 0; overflow-wrap: anywhere; overflow: hidden; letter-spacing: .02em; }
+.library-book { --cover-stock: oklch(92% .027 103); --cover-ink: oklch(31% .055 153); --cover-print: oklch(57% .075 149); --cover-wash: oklch(78% .044 103); }
+.cover-clay { --cover-stock: oklch(93% .032 61); --cover-ink: oklch(35% .068 32); --cover-print: oklch(57% .11 34); --cover-wash: oklch(80% .063 63); }
+.cover-oat { --cover-stock: oklch(94% .035 83); --cover-ink: oklch(34% .043 75); --cover-print: oklch(59% .085 75); --cover-wash: oklch(81% .078 81); }
+.cover-slate { --cover-stock: oklch(92% .022 228); --cover-ink: oklch(32% .041 237); --cover-print: oklch(55% .062 233); --cover-wash: oklch(77% .037 215); }
+.book-cover-face .type-cover { display: flex; flex-direction: column; height: 100%; padding: 22px clamp(19px, 11cqi, 28px) 35px; color: var(--cover-ink); background: var(--cover-stock); background-image: repeating-linear-gradient(0deg, transparent 0 2px, oklch(30% .04 80 / .018) 2px 3px); }
+.type-cover > .cover-imprint { font: italic .75rem/1.2 Georgia, serif; letter-spacing: .025em; padding: 0; border: 0; align-self: start; }
+.cover-print { width: calc(100% + 12px); height: 31%; flex: 0 0 31%; min-height: 48px; margin: 10px -6px 18px; overflow: visible; }
+.print-solid { fill: var(--cover-print); }
+.print-wash { fill: var(--cover-wash); }
+.print-paper { fill: var(--cover-stock); }
+.print-line { fill: none; stroke: var(--cover-ink); stroke-width: .8; }
+.print-paper-line { fill: none; stroke: var(--cover-stock); stroke-width: .8; }
+.book-excerpt-space { flex: 1; min-height: 0; margin: 0 0 16px; overflow: hidden; }
+.type-cover .book-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--cover-excerpt-lines, 5); font: clamp(.875rem, 7.3cqi, 1.125rem)/1.8 var(--book-font); font-weight: 400; margin: 0; overflow-wrap: anywhere; overflow: hidden; line-break: strict; letter-spacing: .035em; }
+.paper-cover .book-date { color: var(--cover-ink); left: clamp(19px, 11cqi, 28px); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .book-date { position: absolute; bottom: 14px; left: clamp(16px, 12cqi, 30px); z-index: 2; max-width: calc(100% - 32px); color: var(--sheet); font-size: 9.5px; line-height: 1.4; }
 .has-cover .book-date { bottom: 13px; left: 13px; padding: 4px 6px; color: var(--ink); background: oklch(98.5% .009 86 / .93); border: 1px solid oklch(82% .022 90 / .65); }
 .type-cover i { display: none; }
@@ -169,4 +180,5 @@ html[data-book-transition=native]::view-transition-new(fable-open-book) { animat
 html[data-book-transition=fallback] .reader[data-book-arrival=true] { animation: bookReaderIn 160ms ease-out; }
 @keyframes bookCoverAway { to { opacity: 0; } }
 @keyframes bookReaderIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
-@media (max-width: 520px) { .book-cover-face .type-cover { padding: 18px 14px 30px; } .type-cover > span { padding-bottom: 8px; } .book-excerpt-space { margin: 12px 0 4px; } .book-date { bottom: 11px; left: 14px; font-size: 9.5px; } .has-cover .book-date { bottom: 10px; left: 10px; padding: 4px 6px; } }
+@media (max-width: 520px) { .book-cover-face .type-cover { padding: 18px 14px 30px; } .type-cover > span { padding-bottom: 8px; } .book-excerpt-space { margin: 0 0 8px; } .cover-print { margin: 8px -6px 12px; flex-basis: 29%; } .paper-cover .book-date { left: 14px; } .book-date { bottom: 11px; left: 14px; font-size: 9.5px; } .has-cover .book-date { bottom: 10px; left: 10px; padding: 4px 6px; } }
+@media (max-width: 380px) { .masthead { height: auto; min-height: 96px; padding-top: 12px; padding-bottom: 12px; flex-wrap: wrap; gap: 8px; } .masthead nav { width: 100%; justify-content: space-between; gap: 12px; } .masthead nav a { white-space: nowrap; } }

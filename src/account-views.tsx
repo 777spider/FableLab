@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { JobDTO, ShareDTO } from '../shared/contracts';
 import { forestArt, lighthouseArt } from './art';
 import { libraryPresets, presetURL } from './preset';
-import { newestBooks, openingExcerpt } from './books';
+import { bookCoverDesign, newestBooks, openingExcerpt } from './books';
 
 export type AuthView = 'login' | 'register' | 'recover';
 export type AuthFields = { username: string; password: string; invitationCode: string; recoveryCode: string };
@@ -143,6 +143,26 @@ export function LibraryView({ jobs, loading, error, legacyCount, importing, onIm
   </main>;
 }
 
+function CoverPrint({ motif }: { motif: ReturnType<typeof bookCoverDesign>['motif'] }) {
+  return <svg className={`cover-print print-${motif}`} viewBox="0 0 210 105" aria-hidden="true" focusable="false">
+    {motif === 'orbit' ? <>
+      <circle className="print-wash" cx="132" cy="44" r="43" />
+      <path className="print-solid" d="M24 95V49a43 43 0 0 1 86 0v46H24Z" />
+      <path className="print-line" d="M36 96V49a31 31 0 0 1 62 0v47M48 96V49a19 19 0 0 1 38 0v47M60 96V49a7 7 0 0 1 14 0v47M16 96h177M155 11v80M149 77h13" />
+    </> : motif === 'fold' ? <>
+      <path className="print-wash" d="M47 10h135L145 96H10Z" />
+      <path className="print-solid" d="M47 10 145 96H10Z" />
+      <path className="print-paper" d="m47 10 36 86h62Z" />
+      <path className="print-line" d="m58 17 126 79M89 11l97 67M120 11l66 46M151 11l35 24M14 100h180" />
+    </> : <>
+      <circle className="print-wash" cx="146" cy="37" r="34" />
+      <path className="print-solid" d="M18 75c28-34 57-34 88-5s61 29 87-2v32H18Z" />
+      <path className="print-line" d="M18 26c31-25 57-20 88 7s59 26 87-2M18 38c31-25 57-20 88 7s59 26 87-2M18 50c31-25 57-20 88 7s59 26 87-2M18 62c31-25 57-20 88 7s59 26 87-2" />
+      <path className="print-paper-line" d="M25 90c29-23 51-18 80 1s53 13 78-6" />
+    </>}
+  </svg>;
+}
+
 function CoverExcerpt({ excerpt }: { excerpt: string }) {
   const area = useRef<HTMLDivElement>(null);
   const text = useRef<HTMLParagraphElement>(null);
@@ -172,9 +192,10 @@ function LibraryBook({ job, index, opening, onOpen }: { job: JobDTO; index: numb
   const title = job.stories[0]?.title || job.concept;
   const status = currentStatus(job);
   const shape = ['tall', 'compact', 'medium'][index % 3];
+  const design = bookCoverDesign(job.id);
   const date = bookCreationDate(job.createdAt);
   const href = job.provenance === 'preset' ? presetURL(job) : `/learn?${new URLSearchParams({ job: job.id, mode: job.format })}`;
-  return <a className={`library-book book-${shape} ${cover ? 'has-cover' : ''} ${opening ? 'is-opening' : ''}`} data-book-id={job.id} href={href} onClick={event => onOpen(event, job)}><div className="book-cover" aria-hidden="true"><div className="book-pages" /><div className="book-cover-face">{cover ? <img src={cover} alt="" loading="lazy" onError={() => setFailedCover(true)} /> : <div className="type-cover"><span>fablelab.</span><CoverExcerpt excerpt={openingExcerpt(job)} /></div>}{date && <time className="book-date" dateTime={job.createdAt}>{date} {job.format === 'comic' ? '作画' : '写下'}</time>}<span className="book-open">翻开 ↗</span></div></div><div className="book-details"><h2>{title}</h2><p>{job.concept}{status && <span>{status}</span>}</p></div></a>;
+  return <a className={`library-book book-${shape} ${cover ? 'has-cover' : 'paper-cover'} cover-${design.tone} ${opening ? 'is-opening' : ''}`} data-book-id={job.id} href={href} onClick={event => onOpen(event, job)}><div className="book-cover" aria-hidden="true"><div className="book-pages" /><div className="book-cover-face">{cover ? <img src={cover} alt="" loading="lazy" onError={() => setFailedCover(true)} /> : <div className="type-cover"><span className="cover-imprint">fablelab.</span><CoverPrint motif={design.motif} /><CoverExcerpt excerpt={openingExcerpt(job)} /></div>}{date && <time className="book-date" dateTime={job.createdAt}>{date} {job.format === 'comic' ? '作画' : '写下'}</time>}<span className="book-open">翻开 ↗</span></div></div><div className="book-details"><h2>{title}</h2><p>{job.concept}{status && <span>{status}</span>}</p></div></a>;
 }
 
 export function SharePanel({ job, share, known, loading, busy, error, notice, onCreate, onRevoke, onReload, onClose }: {

@@ -2,6 +2,14 @@
 
 Initial preview checked locally on 2026-10-26 with Node.js 24.19.0 and npm 11.17.0. The bookshelf and optional long-text updates below were checked on 2026-10-27.
 
+## Literary cover art: 2026-10-28
+
+The public checkout passed all **86 tests** and `npm run build`; Studio passed all 84 tests and its build. The four cover-related source files match across the checkouts. No dependencies or bundled font files changed.
+
+The actual local production build passed **27 browser checks** at 1440, 768, 390 and 320px. All four paper palettes and three original SVG compositions were inspected in screenshots. Text/paper contrast was 9.41–10.21:1; opening excerpts fit above the date at 14px or larger, titles appeared below the covers, and comic artwork remained intact. Refresh/input reordering preserved each cover's identity. Opening, eight-page reading, Back focus, reduced motion, keyboard skip-link visibility, narrow navigation and zero font downloads passed without application errors. Three private stories were explicitly synthetic fixtures in isolated browser GET mocks; both built-in cases and comic art were real bundled assets. There were no model calls or production writes. See the [actual preview and design sources](COVER_DESIGN.md).
+
+This art revision is newer than the earlier frozen deployment candidate. It has not been deployed to the live example.
+
 ## Typography, shelf and durable recovery: 2026-10-28
 
 The public checkout passed **86 tests**, zero failures or skips, and `npm run build`. The production configuration, portable launcher, dependency lock, fetch-compatible Windows HTTP ports, presets and public artwork remain intact. This source revision has not been deployed to the live example: the fresh independent-service SSH preflight failed before staging or switching anything.

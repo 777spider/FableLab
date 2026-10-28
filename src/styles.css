@@ -26,8 +26,8 @@ img { display: block; max-width: 100%; height: auto; }
 main { width: 100%; }
 ::selection { background: oklch(82% .11 70); color: var(--ink); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-.skip-link { position: fixed; top: -4rem; left: 1rem; z-index: 10; padding: 1rem; background: var(--ink); color: var(--sheet); }
-.skip-link:focus { top: 1rem; }
+.skip-link { position: fixed; top: -4rem; left: 1rem; z-index: 10; padding: 1rem; background: var(--ink); color: var(--sheet); clip-path: inset(50%); }
+.skip-link:focus { top: 1rem; clip-path: none; }
 .masthead { height: 96px; max-width: 1536px; margin: auto; padding: 0 4.2%; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
 .wordmark { font-family: Georgia, var(--serif); font-size: 38px; font-weight: 700; letter-spacing: -2.5px; display: inline-flex; align-items: baseline; }
 .wordmark span { font-weight: 400; }

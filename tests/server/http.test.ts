@@ -4,12 +4,12 @@ import {mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, unlinkSync}
 import {join, resolve, sep, basename} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash, randomInt} from 'node:crypto';
+import type {Express} from 'express';
 import {createApp} from '../../server/app.ts';
 import {AuthService} from '../../server/auth.ts';
 import {ShareService} from '../../server/share.ts';
 import {JobService} from '../../server/jobs.ts';
 import {SyntheticProvider} from '../../server/synthetic.ts';
-import type {Express} from 'express';
 import type {AuthResponse, JobResponse, SessionResponse, ShareResponse, PublicShareResponse} from '../../shared/contracts.ts';
 
 const password = 'a local synthetic passphrase 2026';
@@ -29,10 +29,10 @@ async function listenForFetch(app: Express) {
   }
   throw new Error('No fetch-compatible local test port was allocated');
 }
-async function setup(production = false, unicode = false) {
+async function setup(production = false, unicode = false, provider = new SyntheticProvider()) {
   const dir = mkdtempSync(join(tmpdir(), 'studio-http-')), dataDir = join(dir, 'data'), distDir = unicode ? join(dir, '.hidden', '寓言工作室') : join(dir, 'dist');
   mkdirSync(distDir, {recursive: true}); writeFileSync(join(distDir, 'index.html'), '<html><title>Studio</title></html>');
-  const jobs = new JobService(dataDir, new SyntheticProvider()), auth = new AuthService(dataDir), shares = new ShareService(dataDir), deploymentHoldFile = join(dataDir, '.deployment-hold');
+  const jobs = new JobService(dataDir, provider), auth = new AuthService(dataDir), shares = new ShareService(dataDir), deploymentHoldFile = join(dataDir, '.deployment-hold');
   const app = createApp(jobs, {production, cookieSecret: 'test-only-secret-'.repeat(3), accessCodeHash: createHash('sha256').update('1025').digest('hex'), publicOrigin: 'https://yuyan.example', distDir, deploymentHoldFile}, {auth, shares});
   const server = await listenForFetch(app);
   const address = server.address() as {port: number};
@@ -218,4 +218,23 @@ test('deployment hold rejects every API write before parsing while read routes s
     unlinkSync(s.deploymentHoldFile);
     assert.equal((await post(s.url, '/auth/register', {code: 'wrong', username: 'reader_a', password})).status, 403);
   } finally {await s.close();}
+});
+
+test('logging out and leaving the page do not abort a job, and login restores the same saved progress', async () => {
+  const provider = new SyntheticProvider(), original = provider.story.bind(provider); let started: () => void = () => {}, release: () => void = () => {};
+  const storyStarted = new Promise<void>(resolve => {started = resolve;}), detached = new Promise<void>(resolve => {release = resolve;});
+  provider.story = async (input, signal) => {started(); await detached; assert.equal(signal.aborted, false); return original(input, signal);};
+  const s = await setup(false, false, provider);
+  try {
+    const a = await register(s.url, 'background_reader'), owner = s.auth.authenticate(a.cookie.split('=')[1])!.owner;
+    const response = await post(s.url, '/jobs', {concept: '反馈', format: 'text', clientRequestId: 'background-session-01'}, a.cookie), id = (await response.json() as JobResponse).job.id;
+    await storyStarted; const before = s.jobs.get(owner, id)!; assert.ok(before.knowledge);
+    assert.equal((await post(s.url, '/auth/logout', {}, a.cookie)).status, 200); assert.equal((await fetch(s.url + '/learn/api/jobs/' + id, {headers: {Cookie: a.cookie}})).status, 401);
+    // No browser polling or session remains while the server finishes this same job.
+    release(); const result = await completed(s.jobs, owner, id); assert.equal(result.id, id); assert.equal(result.progress.attempts, 4); assert.deepEqual(result.knowledge, before.knowledge);
+    const login = await post(s.url, '/auth/login', {username: 'background_reader', password}); assert.equal(login.status, 200); const cookie = login.headers.get('set-cookie')!.split(';')[0];
+    const restored = await (await fetch(s.url + '/learn/api/jobs/' + id, {headers: {Cookie: cookie}})).json() as JobResponse;
+    assert.equal(restored.job.id, id); assert.equal(restored.job.status, 'completed'); assert.deepEqual(restored.job.stories, result.stories);
+    const shelf = await (await fetch(s.url + '/learn/api/jobs', {headers: {Cookie: cookie}})).json() as {jobs: JobResponse['job'][]}; assert.deepEqual(shelf.jobs.map(job => job.id), [id]);
+  } finally {release(); await s.close();}
 });

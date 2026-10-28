@@ -28,6 +28,7 @@ export interface TaskDTO {
 }
 export interface DiscussionDTO { prompt: string; guidance: string; }
 export interface JobErrorDTO { code: string; message: string; recoverable: boolean; }
+export interface JobRetryDTO { attempt: number; nextAttemptAt: string; reason: 'network' | 'timeout' | 'busy' | 'service'; }
 export interface JobDTO {
   id: string; concept: string; format: LearningFormat; status: JobStatus; phase: JobPhase;
   /** New jobs have one story; absence in saved legacy records means two. */
@@ -35,7 +36,7 @@ export interface JobDTO {
   /** Missing in legacy records means standard; long stories support text only. */
   storyLength?: StoryLength;
   createdAt: string; updatedAt: string;
-  progress: { completedStages: string[]; stageLabel: string; elapsedMs: number; etaMs: number | null; attempts: number; attemptBudget: number; retrying?: boolean };
+  progress: { completedStages: string[]; stageLabel: string; elapsedMs: number; etaMs: number | null; attempts: number; attemptBudget: number; retrying?: boolean; retry?: JobRetryDTO | null };
   knowledge: KnowledgeDTO | null; stories: StoryDTO[]; lesson: LessonDTO | null;
   tasks: TaskDTO[]; discussion: DiscussionDTO[];
   error: JobErrorDTO | null; quality: 'pending' | 'checked' | 'needs_review';

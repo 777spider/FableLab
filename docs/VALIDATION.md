@@ -2,6 +2,16 @@
 
 Initial preview checked locally on 2026-10-26 with Node.js 24.19.0 and npm 11.17.0. The bookshelf and optional long-text updates below were checked on 2026-10-27.
 
+## Typography, shelf and durable recovery: 2026-10-28
+
+The public checkout passed **86 tests**, zero failures or skips, and `npm run build`. The production configuration, portable launcher, dependency lock, fetch-compatible Windows HTTP ports, presets and public artwork remain intact. This source revision has not been deployed to the live example: the fresh independent-service SSH preflight failed before staging or switching anything.
+
+The matching Studio build passed 84 tests and 26 browser assertions on desktop1440×1000 and mobile390×844. Actual local anonymous checks exercised both bundled cases, native paragraph font rendering, explanation/discussion, comic artwork and zero font network requests. Isolated browser mocks exercised creation-time shelf ordering, escaped opening excerpts, cover sizing, book opening/Back/reduced motion, initial-read and polling reconnect, close/reopen restoration, explicit pause, scheduled backoff, one idempotent sixteen-page creation, empty/demo offline recovery and account-switch cache isolation. Private UI and failures were mocked; they are not production account/generation acceptance. The complete native font observed on the Windows test host was Microsoft YaHei; no fonts were downloaded or redistributed.
+
+Synthetic clock/provider tests cover bounded delays and call budgets, persisted due times across restart, one worker, explicit pause, image checkpoints/references and successful academic recovery followed by image failure/restart without repeated review. A real localhost HTTP test logs out while a synthetic story stage is blocked, then confirms the server completes without polling and a fresh login retrieves the same task. Existing validation and one automatic candidate repair remain in place. See [recovery boundaries](RECOVERY.md).
+
+Production accounts, jobs, learning records and model services were not used for testing. No server restart or outage was induced on the hosted service, and the new runtime has not been accepted there.
+
 | Check | Result |
 | --- | --- |
 | Clean installation | `npm ci` passed with dependencies from the official npm registry. |

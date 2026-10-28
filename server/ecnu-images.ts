@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {retryAfterDelay} from './retry.ts';
 
 // Verified 2026-10-26 against developer.ecnu.edu.cn imagegenerate.html/imageedit.html.
 // The edit API documents one image file. Its size field is ignored by the provider.
@@ -54,7 +55,7 @@ export type EcnuImageResult={
 };
 
 export class EcnuImageError extends Error {
-  constructor(public readonly code:string,public readonly returnedModel:string|null=null){super(code);this.name='EcnuImageError';}
+  constructor(public readonly code:string,public readonly returnedModel:string|null=null,public readonly retryAfterMs?:number){super(code);this.name='EcnuImageError';}
 }
 function fail(code:string):never{throw new EcnuImageError(code);}
 
@@ -139,7 +140,7 @@ export async function requestEcnuImage(options:EcnuImageRequest):Promise<EcnuIma
   const fetcher=options.fetch||globalThis.fetch;
   const started=Date.now(),startedAt=new Date(started).toISOString();
   const response=await request(fetcher,API+operation,{method:'POST',headers,body,signal:options.signal?AbortSignal.any([options.signal,AbortSignal.timeout(240000)]):AbortSignal.timeout(240000),redirect:'error'},'IMAGE_REQUEST_FAILED');
-  if(!response.ok)fail('ECNU_HTTP_'+response.status);
+  if(!response.ok){await response.body?.cancel();throw new EcnuImageError('ECNU_HTTP_'+response.status,null,[429,503].includes(response.status)?retryAfterDelay(response.headers.get('retry-after')):undefined);}
   let payload:any;
   try{payload=JSON.parse((await readBounded(response,MAX_RESPONSE_BYTES,'IMAGE_RESPONSE_TOO_LARGE')).toString('utf8'));}
   catch(error){if(error instanceof EcnuImageError)throw error;return fail('IMAGE_RESPONSE_INVALID');}

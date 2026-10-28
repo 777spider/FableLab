@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { JobDTO, ShareDTO } from '../shared/contracts';
 import { forestArt, lighthouseArt } from './art';
 import { libraryPresets, presetURL } from './preset';
+import { newestBooks, openingExcerpt } from './books';
 
 export type AuthView = 'login' | 'register' | 'recover';
 export type AuthFields = { username: string; password: string; invitationCode: string; recoveryCode: string };
@@ -92,7 +93,7 @@ export function LibraryView({ jobs, loading, error, legacyCount, importing, onIm
   jobs: JobDTO[]; loading: boolean; error: string; legacyCount: number; importing: boolean;
   onImport: () => void; onRetry: () => void; onOpenBook: (job: JobDTO) => void;
 }) {
-  const books = [...libraryPresets, ...jobs.filter(job => !libraryPresets.some(example => example.id === job.id))];
+  const books = newestBooks([...libraryPresets, ...jobs.filter(job => !libraryPresets.some(example => example.id === job.id))]);
   const [openingId, setOpeningId] = useState('');
   const opening = useRef<{ animations: Animation[]; timer: number; navigating: boolean } | null>(null);
   useEffect(() => {
@@ -142,9 +143,9 @@ export function LibraryView({ jobs, loading, error, legacyCount, importing, onIm
   </main>;
 }
 
-function CoverTitle({ title }: { title: string }) {
+function CoverExcerpt({ excerpt }: { excerpt: string }) {
   const area = useRef<HTMLDivElement>(null);
-  const text = useRef<HTMLElement>(null);
+  const text = useRef<HTMLParagraphElement>(null);
   useLayoutEffect(() => {
     const box = area.current, heading = text.current;
     if (!box || !heading) return;
@@ -153,34 +154,27 @@ function CoverTitle({ title }: { title: string }) {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         if (disposed || !box.clientWidth || !box.clientHeight) return;
-        heading.style.fontSize = '';
-        heading.style.removeProperty('--cover-title-lines');
-        let low = 14, high = Math.max(14, parseFloat(getComputedStyle(heading).fontSize));
-        for (let step = 0; step < 9; step++) {
-          const size = (low + high) / 2; heading.style.fontSize = `${size}px`;
-          if (heading.scrollHeight <= box.clientHeight && heading.scrollWidth <= box.clientWidth) low = size; else high = size;
-        }
-        heading.style.fontSize = `${Math.floor(low * 10) / 10}px`;
-        heading.style.setProperty('--cover-title-lines', String(Math.max(1, Math.floor(box.clientHeight / parseFloat(getComputedStyle(heading).lineHeight)))));
+        const lines = Math.max(1, Math.floor(box.clientHeight / parseFloat(getComputedStyle(heading).lineHeight)));
+        heading.style.setProperty('--cover-excerpt-lines', String(lines));
       });
     };
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
     observer?.observe(box); window.addEventListener('resize', fit);
-    document.fonts?.addEventListener('loadingdone', fit); document.fonts?.ready.then(() => { if (!disposed) fit(); }); fit();
-    return () => { disposed = true; cancelAnimationFrame(frame); observer?.disconnect(); window.removeEventListener('resize', fit); document.fonts?.removeEventListener('loadingdone', fit); };
-  }, [title]);
-  return <div className="book-title-space" ref={area}><strong ref={text} title={title}>{title}</strong></div>;
+    fit();
+    return () => { disposed = true; cancelAnimationFrame(frame); observer?.disconnect(); window.removeEventListener('resize', fit); };
+  }, [excerpt]);
+  return <div className="book-excerpt-space" ref={area}><p className="book-excerpt" ref={text}>{excerpt || '故事正在成篇。'}</p></div>;
 }
 
 function LibraryBook({ job, index, opening, onOpen }: { job: JobDTO; index: number; opening: boolean; onOpen: (event: React.MouseEvent<HTMLAnchorElement>, job: JobDTO) => void }) {
   const [failedCover, setFailedCover] = useState(false);
-  const cover = !failedCover && job.stories.flatMap(s => s.pages).find(p => p.image.status === 'ready' && p.image.url)?.image.url;
+  const cover = job.format === 'comic' && !failedCover && job.stories.flatMap(s => s.pages).find(p => p.image.status === 'ready' && p.image.url)?.image.url;
   const title = job.stories[0]?.title || job.concept;
   const status = currentStatus(job);
   const shape = ['tall', 'compact', 'medium'][index % 3];
   const date = bookCreationDate(job.createdAt);
   const href = job.provenance === 'preset' ? presetURL(job) : `/learn?${new URLSearchParams({ job: job.id, mode: job.format })}`;
-  return <a className={`library-book book-${shape} ${cover ? 'has-cover' : ''} ${opening ? 'is-opening' : ''}`} data-book-id={job.id} href={href} onClick={event => onOpen(event, job)}><div className="book-cover"><div className="book-pages" aria-hidden="true" /><div className="book-cover-face">{cover ? <img src={cover} alt="" loading="lazy" onError={() => setFailedCover(true)} /> : <div className="type-cover"><span>fablelab.</span><CoverTitle title={title} /><i aria-hidden="true">◇</i></div>}{date && <time className="book-date" dateTime={job.createdAt}>{date} {job.format === 'comic' ? '作画' : '写下'}</time>}<span className="book-open" aria-hidden="true">翻开 ↗</span></div></div><div className="book-details"><h2>{title}</h2><p>{job.concept}{status && <span>{status}</span>}</p></div></a>;
+  return <a className={`library-book book-${shape} ${cover ? 'has-cover' : ''} ${opening ? 'is-opening' : ''}`} data-book-id={job.id} href={href} onClick={event => onOpen(event, job)}><div className="book-cover" aria-hidden="true"><div className="book-pages" /><div className="book-cover-face">{cover ? <img src={cover} alt="" loading="lazy" onError={() => setFailedCover(true)} /> : <div className="type-cover"><span>fablelab.</span><CoverExcerpt excerpt={openingExcerpt(job)} /></div>}{date && <time className="book-date" dateTime={job.createdAt}>{date} {job.format === 'comic' ? '作画' : '写下'}</time>}<span className="book-open">翻开 ↗</span></div></div><div className="book-details"><h2>{title}</h2><p>{job.concept}{status && <span>{status}</span>}</p></div></a>;
 }
 
 export function SharePanel({ job, share, known, loading, busy, error, notice, onCreate, onRevoke, onReload, onClose }: {

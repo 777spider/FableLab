@@ -4,6 +4,7 @@ import {join} from 'node:path';
 import {z} from 'zod';
 import {GenerationError,CandidateError,knowledgeSchema,storySchemaFor,lessonSchema,reviewSchema,freshReviewInput,type GenerationProvider,type GenerationInput,type ImageInput,type ImageResult} from './generation.ts';
 import {requestEcnuImage,EcnuImageError} from './ecnu-images.ts';
+import {retryAfterDelay} from './retry.ts';
 import {COMMON,KNOWLEDGE,STORY,LESSON,REVIEW,PROMPT_VERSION} from './prompts.ts';
 const sha=(value:string)=>createHash('sha256').update(value).digest('hex');
 // SSE repeats an envelope per delta; wire size is not the decoded answer size.
@@ -37,7 +38,7 @@ export class EcnuProvider implements GenerationProvider {
   const compact={...input,stories:input.stories.map(({id,title,sourceDomain,characters,paragraphs})=>({id,title,sourceDomain,characters,paragraphs}))};
   const user=JSON.stringify(compact);const meta={stage,promptVersion:PROMPT_VERSION,requestedModel:model,promptHash:sha(system+'\n'+user),thinking:effort,maxTokens};
   try{const response=await(this.config.fetcher??fetch)('https://chat.ecnu.edu.cn/open/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+this.config.apiKey,'Content-Type':'application/json'},redirect:'error',signal:combined,body:JSON.stringify({model,stream:true,thinking:{type:effort==='off'?'disabled':'enabled'},...(effort==='off'?{}:{reasoning_effort:effort}),max_tokens:maxTokens,response_format:{type:'json_schema',json_schema:{name:'studio_'+stage.replace(/-/g,'_'),schema:z.toJSONSchema(schema)}},messages:[{role:'system',content:COMMON+'\n'+system},{role:'user',content:user}]})});
-   if(!response.ok){await response.body?.cancel();throw new GenerationError(response.status===429?'UPSTREAM_BUSY':response.status===504?'UPSTREAM_TIMEOUT':'UPSTREAM_HTTP_'+response.status,response.status===429||response.status>=500);}
+   if(!response.ok){await response.body?.cancel();throw new GenerationError(response.status===429?'UPSTREAM_BUSY':[408,504].includes(response.status)?'UPSTREAM_TIMEOUT':'UPSTREAM_HTTP_'+response.status,response.status===408||response.status===429||response.status>=500,[429,503].includes(response.status)?retryAfterDelay(response.headers.get('retry-after')):undefined);}
    const result=await consumeCompletion(response,combined);if(signal.aborted)throw new GenerationError('ABORTED');this.log({...meta,status:'received',durationMs:Date.now()-started,responseHash:sha(result.content),responseChars:result.content.length,returnedModel:result.returnedModel?.includes(this.config.apiKey)?null:result.returnedModel,finishReason:result.finishReason,chunks:result.chunks,wireBytes:result.wireBytes,contentBytes:result.contentBytes,usage:result.usage});
    try{return JSON.parse(result.content);}catch{throw new CandidateError(result.content,['Output must be one complete valid JSON object matching the stage schema.']);}
   }catch(error){const failure=signal.aborted?new GenerationError('ABORTED'):timeout.aborted?new GenerationError('UPSTREAM_TIMEOUT',true):error instanceof GenerationError?error:new GenerationError('UPSTREAM_NETWORK',true);const stats=(error as {streamStats?:StreamStats})?.streamStats;this.log({...meta,status:'failed',code:failure.code,durationMs:Date.now()-started,...(stats?{wireBytes:stats.wireBytes,contentBytes:stats.contentBytes,chunks:stats.chunks,returnedModel:stats.returnedModel?.includes(this.config.apiKey)?null:stats.returnedModel}:{})});throw failure;}
@@ -49,6 +50,6 @@ export class EcnuProvider implements GenerationProvider {
  async image(input:ImageInput,signal:AbortSignal):Promise<ImageResult>{
   if(!this.config.enabled||!this.config.apiKey)throw new GenerationError('UPSTREAM_NOT_CONFIGURED');
   try{const result=await requestEcnuImage({apiKey:this.config.apiKey,prompt:input.prompt,reference:input.reference,promptVersion:PROMPT_VERSION,size:'1280x720',sceneBibleVersion:'studio-ink-v1',characterBibleVersion:'story-first-reference-v1',fetch:this.config.fetcher,signal});if(signal.aborted)throw new GenerationError('ABORTED');const {bytes,extension,hash,...metadata}=result;return {bytes,extension,hash,metadata};}
-  catch(error){if(signal.aborted)throw new GenerationError('ABORTED');if(error instanceof EcnuImageError)throw new GenerationError(error.code,['IMAGE_REQUEST_TIMEOUT','IMAGE_REQUEST_FAILED','IMAGE_DOWNLOAD_FAILED','ECNU_HTTP_429','ECNU_HTTP_500','ECNU_HTTP_502','ECNU_HTTP_503','ECNU_HTTP_504'].includes(error.code));throw new GenerationError('IMAGE_FAILED');}
+  catch(error){if(signal.aborted)throw new GenerationError('ABORTED');if(error instanceof EcnuImageError)throw new GenerationError(error.code,['IMAGE_REQUEST_TIMEOUT','IMAGE_REQUEST_FAILED','IMAGE_DOWNLOAD_FAILED','ECNU_HTTP_408','ECNU_HTTP_429'].includes(error.code)||/^ECNU_HTTP_5\d\d$/.test(error.code),error.retryAfterMs);throw new GenerationError('IMAGE_FAILED');}
  }
 }

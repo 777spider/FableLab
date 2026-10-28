@@ -12,14 +12,13 @@ function setup(provider=new SyntheticProvider()){
  const dir=mkdtempSync(join(tmpdir(),'studio-test-'));const service=new JobService(dir,provider,{retryDelayMs:1});
  return {dir,service,cleanup(){service.shutdown();rmSync(dir,{recursive:true,force:true});}};
 }
-test('completed knowledge survives transient story failure and resume does not rewrite it',async()=>{
+test('completed knowledge survives repeated upstream failures and automatic continuation does not rewrite it',async()=>{
  let calls=0;const p=new SyntheticProvider();const story=p.story.bind(p);p.story=async(...args)=>{calls++;if(calls<=2)throw new GenerationError('UPSTREAM_TIMEOUT',true);return story(...args);};
  const s=setup(p);try{
   const job=s.service.create(owner,{concept:'反馈',format:'text',clientRequestId:'request-0001'});
-  await until(()=>s.service.get(owner,job.id)!.status==='failed');const failed=s.service.get(owner,job.id)!;
-  assert.ok(failed.knowledge);assert.equal(failed.phase,'story-1');assert.equal(failed.progress.attempts,3);
-  s.service.resume(owner,job.id);await until(()=>s.service.get(owner,job.id)!.status==='completed');
-  assert.deepEqual(s.service.get(owner,job.id)!.knowledge,failed.knowledge);assert.equal(s.service.get(owner,job.id)!.stories.length,1);
+  await until(()=>s.service.get(owner,job.id)!.status==='completed');const completed=s.service.get(owner,job.id)!;
+  assert.ok(completed.knowledge);assert.equal(calls,3);assert.equal(completed.progress.attempts,6);
+  assert.equal(completed.progress.completedStages.filter(stage=>stage==='knowledge').length,1);assert.equal(completed.stories.length,1);assert.equal(completed.progress.retry,null);
  }finally{s.cleanup();}
 });
 test('duplicate submissions and concurrent resumes share one job, owners cannot read it',async()=>{
@@ -74,8 +73,8 @@ test('restarting a rejected stage does not reset automatic repair or attempt bud
  }finally{s.cleanup();}
 });
 test('retrying comic failures fills missing pages while preserving all ready images',async()=>{
- const p=new SyntheticProvider();const image=p.image.bind(p);let count=0;p.image=async(...args)=>{count++;if(count===2||count===3)throw new GenerationError('UPSTREAM_TIMEOUT',true);return image(...args);};const s=setup(p);try{
+ const p=new SyntheticProvider();const image=p.image.bind(p);let count=0;p.image=async(...args)=>{count++;if(count===2)throw new GenerationError('IMAGE_FAILED');return image(...args);};const s=setup(p);try{
  const a=s.service.create(owner,{concept:'反馈',format:'comic',clientRequestId:'request-images-01'});await until(()=>s.service.get(owner,a.id)!.status==='completed');const initial=s.service.get(owner,a.id)!;assert.equal(initial.stories[0].pages[1].image.status,'failed');const ready=initial.stories[0].pages.filter(p=>p.image.status==='ready').map(p=>p.image.url);assert.equal(ready.length,3);
- s.service.resume(owner,a.id);await until(()=>s.service.get(owner,a.id)!.status==='completed');const result=s.service.get(owner,a.id)!;assert.ok(result.stories.every(s=>s.pages.every(p=>p.image.status==='ready')));assert.deepEqual(result.stories[0].pages.filter((_p,i)=>i!==1).map(p=>p.image.url),ready);assert.equal(count,6);assert.equal(result.progress.completedStages.filter(s=>s==='knowledge').length,1);
+ s.service.resume(owner,a.id);await until(()=>s.service.get(owner,a.id)!.status==='completed');const result=s.service.get(owner,a.id)!;assert.ok(result.stories.every(s=>s.pages.every(p=>p.image.status==='ready')));assert.deepEqual(result.stories[0].pages.filter((_p,i)=>i!==1).map(p=>p.image.url),ready);assert.equal(count,5);assert.equal(result.progress.completedStages.filter(s=>s==='knowledge').length,1);
  }finally{s.cleanup();}
 });

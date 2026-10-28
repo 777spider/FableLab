@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import type {KnowledgeDTO,LessonDTO,StoryDTO,StoryLength,TaskDTO,DiscussionDTO} from '../shared/contracts.ts';
-export class GenerationError extends Error {constructor(public code:string,public transient=false){super(code);}}
+export class GenerationError extends Error {constructor(public code:string,public transient=false,public retryAfterMs?:number){super(code);}}
 export class CandidateError extends GenerationError {constructor(public candidate:unknown,public details:string[]){super('CONTENT_INVALID');}}
 export class ReviewOutputError extends CandidateError {constructor(candidate:unknown,details:string[]){super(candidate,details);this.code='REVIEW_OUTPUT_INVALID';}}
 const text=z.string().trim().min(2).max(6000);

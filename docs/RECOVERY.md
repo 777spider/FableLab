@@ -1,0 +1,15 @@
+# Background generation and recovery
+
+Generation belongs to a server job and the owning account. Closing a browser, losing a polling connection or logging out does not pause that job. When the account returns to `/learn`, the UI retrieves its library and opens its newest active job; a specific `?job=` URL keeps its selected job. Paused and failed jobs remain available in the shelf. Reading positions stay in account-scoped browser storage.
+
+Browser reads use a 20-second request timeout and retry temporary network/408/429/5xx failures with a 2–30-second bounded delay. Returning to a visible tab or reconnecting triggers a fresh read. Reconnection never submits a generation POST. Creation retains its client request ID while the original browser submission is unresolved; the server deduplicates that ID. Other account, sharing and mutation requests are not automatically replayed.
+
+The server saves the current stage, completed results, call counters and a retry checkpoint in its existing jobs store. A checkpoint contains only a stage key, transport failure count, next attempt time and a safe reason. API responses expose only the count, timestamp and `network`, `timeout`, `busy` or `service` reason; prompts, owner IDs, headers and credentials are not exposed. A delayed job yields the single worker to another eligible job.
+
+Transient transport failures retry after **15, 45, 135, then 300 seconds**, with later delays capped at 300 seconds. Valid `Retry-After` values from text/image 429 or 503 responses can extend the delay to at most 15 minutes. At most eight calls are permitted per stage, at most four nontransport calls per stage, and at most 48 calls in the whole task. Historical counters are never reset. Reaching a limit stops with saved content readable and `ATTEMPT_BUDGET_EXHAUSTED`; it does not silently purchase unlimited attempts.
+
+Server restart reloads the same job and honors a saved future retry time. An interrupted running request returns to queued state, and completed stages are skipped. Images restart at the exact pending transport checkpoint, retaining ready images and references; earlier content/image failures are not quietly retried. Explicit pause clears the automatic retry schedule and survives restart. Resume is deliberate and preserves all call counters. No job runs while the server is stopped.
+
+Transport retries do not weaken content validation or academic review. A rejected candidate still receives at most one automatic repair; existing academic recovery and final-review requirements remain. An upstream request may already have run or incurred charges when a local timeout, shutdown or pause interrupts waiting; the app cannot resume an upstream stream or guarantee exactly-once billing.
+
+Validation uses synthetic providers and clocks, real localhost HTTP logout/login, and isolated browser mocks for reconnect/UI behavior. Production account, content and service-restart tests are excluded from the deployment checks to preserve real records. These tests establish the recovery mechanism, not model quality or universal upstream availability.

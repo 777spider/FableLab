@@ -24,11 +24,13 @@ A self-hostable, Chinese-first learning app that turns a difficult concept into 
 | --- | --- | --- |
 | Follow a coherent fable, in text or illustrated pages. Both modes share the same story. | Reveal the formal concept, connect quoted story passages to its relations, and examine where the analogy stops working. | Try practice questions and explore guided discussion prompts. |
 
-FableLab also includes a private bookshelf, account recovery codes, and read-only snapshot links you can revoke. Generation checkpoints persist across refreshes and server restarts; bounded retries continue unfinished stages and missing illustrations.
+FableLab also includes a private bookshelf, account recovery codes, and read-only snapshot links you can revoke. Generation continues on the server after closing the browser or logging out. Returning to the account restores its active task; temporary failures use persisted, bounded backoff that survives restart. Explicit pause and the existing content checks remain in place. See [recovery and retry limits](docs/RECOVERY.md).
 
 Text generation offers **Standard** and optional **Long**. A long story develops more actions, conflicts and consequences across **8–16 natural scenes/pages**, with the page count chosen by the model. Long stories use text and make no image requests; standard text, comics and both built-in examples remain available. See the [writing design](docs/WRITING_DESIGN.md).
 
-Every bookshelf includes two ready-to-read examples: *Fog Harbor Ferry* (simulation, illustrated) and *The Last Slip of Paper* (explainable AI in education, text). Opening a book gives it a brief lift and cover turn into the reader; reduced-motion preferences keep navigation immediate. Creation dates sit in small type at the lower left of each cover, and titles adapt to the available space. Book titles, story prose and page headings use the self-hosted **LXGW WenKai Screen** reading font; see [font sources and licenses](docs/FONTS.md).
+Every bookshelf includes two ready-to-read examples: *Fog Harbor Ferry* (simulation, illustrated) and *The Last Slip of Paper* (explainable AI in education, text). New books appear first by creation date. Text covers preview the story opening, with the title below; comic covers retain their artwork. Opening a book gives it a brief lift and cover turn into the reader; reduced-motion preferences keep navigation immediate. Creation dates sit in small type at the lower left of each cover. Complete native Chinese fonts render immediately: sans for prose and controls, serif for titles, with no font downloads. Historical open-source font files and licenses are retained; see [font details](docs/FONTS.md).
+
+The 2026-10-28 source update is newer than the live demo: the independent service deployment stopped at a failed SSH preflight, before staging or switching the running release.
 
 This is a learning app prototype. Its educational effects have not been formally evaluated. Generated references remain marked unverified, and machine review does not replace subject-matter review.
 

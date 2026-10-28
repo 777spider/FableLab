@@ -4,10 +4,11 @@ import { flushSync } from 'react-dom';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import type { JobDTO, LearningFormat, SessionResponse, ShareDTO, SharedModuleDTO, StoryLength, TaskDTO, UserDTO } from '../shared/contracts';
 import { api, ApiError, upsert } from './api';
+import { newestBooks } from './books';
+import { reconnectable, watchRead } from './connection';
 import { AccountPage, authURL, bookCreationDate, type AuthFields, type AuthView, LibraryView, RecoveryPage, safeReturnTo, SharePanel, UnavailablePage } from './account-views';
 import { libraryPresets, preset, presetForDemo, presetURL } from './preset';
 import { forestArt, presetArtSize } from './art';
-import './fonts.css';
 import './styles.css';
 import './account.css';
 
@@ -87,17 +88,17 @@ function Progress({ job, busy, offline, onAction }: { job: JobDTO; busy: boolean
   const stage = job.phase === 'knowledge' ? '梳理概念' : job.phase === 'story-1' ? single ? '写成一则寓言' : '写第一则故事' : job.phase === 'story-2' ? '写第二则故事' : job.phase === 'lesson' ? '整理解析与讨论' : job.phase === 'images' ? '绘制插画' : '核对故事与学理';
   const steps = single ? [['概念', 'knowledge'], ['寓言', 'story-1'], ['解析', 'lesson'], ['复核', 'review']] : [['概念', 'knowledge'], ['故事一', 'story-1'], ['故事二', 'story-2'], ['解析', 'lesson'], ['复核', 'review']];
   return <section className={`generation ${job.status === 'failed' ? 'generation-stopped' : ''}`} aria-label="生成进度">
-    <div className="generation-heading"><span className={isActive && !offline ? 'status-dot pulsing' : 'status-dot'} /><strong>{offline ? '连接中断，内容已保留' : job.status === 'paused' ? '已暂停' : job.status === 'failed' ? '这一步暂时停住了' : job.status === 'completed' ? '部分插画尚未完成' : job.status === 'queued' ? '已排队，等待继续' : job.progress.retrying ? '正在自动重试' : stage}</strong>
+    <div className="generation-heading"><span className={isActive && !offline && !job.progress.retry ? 'status-dot pulsing' : 'status-dot'} /><strong>{offline ? '连接中断，正在重连' : job.status === 'paused' ? '已暂停' : job.status === 'failed' ? '这一步暂时停住了' : job.status === 'completed' ? '部分插画尚未完成' : job.progress.retry ? '等待自动重试' : job.status === 'queued' ? '已排队，等待继续' : job.progress.retrying ? '正在自动重试' : stage}</strong>
       {isActive ? <button type="button" disabled={busy || offline} onClick={() => onAction('pause')}>{busy ? '处理中…' : '暂停'}</button> : <button type="button" disabled={busy || offline || blocked} onClick={() => onAction('resume')}>{busy ? '处理中…' : blocked ? '暂不能继续' : job.error?.code === 'QUALITY_REVIEW_REQUIRED' && job.error.recoverable ? '修复并继续' : hasFailedImage && job.status === 'completed' ? '重试插画' : '继续生成'}</button>}
     </div>
     <ol className="generation-steps">{steps.map(([name, key]) => <li key={key} className={job.progress.completedStages.includes(key) ? 'step-done' : job.phase === key ? 'step-current' : ''}><span aria-hidden="true">{job.progress.completedStages.includes(key) ? '✓' : '·'}</span>{name}</li>)}</ol>
-    {job.status === 'failed' || job.status === 'paused' ? <p>已完成的内容可以阅读，继续时从未完成处接上。</p> : job.stories.length > 0 ? <p>文字已经可以读，后续内容会陆续出现。</p> : <p>内容会逐步保存，离开后仍可回来继续。</p>}
+    {job.status === 'failed' || job.status === 'paused' ? <p>{job.error?.code === 'ATTEMPT_BUDGET_EXHAUSTED' ? '自动重试已到上限，已完成的内容仍可阅读。' : '已完成的内容可以阅读，继续时从未完成处接上。'}</p> : job.progress.retry ? <p>将于<time dateTime={job.progress.retry.nextAttemptAt}>{new Date(job.progress.retry.nextAttemptAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</time>自动重试，已保存内容仍可阅读。</p> : job.stories.length > 0 ? <p>文字已经可以读，后续内容会陆续出现。</p> : <p>内容逐步保存，离开页面或退出登录后仍在后台继续。</p>}
   </section>;
 }
 
 function Welcome({ format, onDemo }: { format: LearningFormat; onDemo: () => void }) {
   return <section className={`welcome welcome-${format}`}>
-    <div className="welcome-heading"><h1>一个概念，<br />可以怎样讲？</h1><span className="welcome-asterisk" aria-hidden="true">*</span></div>
+    <div className="welcome-heading"><h1>一个概念，<br />可以怎样讲？</h1></div>
     {format === 'comic' ? <figure className="welcome-illustration"><img {...forestArt} alt="森林中的四只动物戴着相同面具，彼此观察。" /></figure> : <div className="welcome-page"><span className="paper-number" aria-hidden="true">1</span><h2>雾港渡船</h2><p>雾港的早班渡船只有两条，船工阿澈每天最怕听见码头拐角传来的一串脚步声。</p><p>老周把黄铜怀表往桌上一搁：“你干脆把岸边等船的人画成小石子，一趟一趟摆给你看。”</p><span className="paper-end" aria-hidden="true">◇</span></div>}
     <button className="demo-link" type="button" onClick={onDemo}><span>先读一篇<span className="demo-name">《雾港渡船》</span></span><span>预置示例 <Arrow /></span></button>
   </section>;
@@ -158,7 +159,7 @@ function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction
       {shown ? <article className={`reading-page ${format === 'comic' ? 'comic-page' : 'text-page'}`}>
         <div className="page-heading"><span className="page-sequence">{String(shown.pi + 1).padStart(2, '0')}</span><h1 ref={heading} tabIndex={-1}>{shown.page.title}</h1></div>
         {format === 'comic' && <figure className="comic-frame">
-          {currentImage && !failed[currentImage] ? <div className="comic-image" aria-busy={!loaded[currentImage]}><img src={currentImage} {...presetArtSize(currentImage)} decoding="async" fetchPriority="high" alt={shown.page.alt || `${shown.story.title}，${shown.page.title}`} onLoad={() => setLoaded(state => ({ ...state, [currentImage]: true }))} onError={() => setFailed(state => ({ ...state, [currentImage]: true }))} />{!loaded[currentImage] && <p className="comic-loading" role="status">插画加载中…</p>}</div> : <div className="image-waiting" role="status"><span aria-hidden="true">{shown.page.image.status === 'failed' || failed[currentImage || ''] ? '↻' : '*'}</span><p>{readOnly || shown.page.image.status === 'failed' || failed[currentImage || ''] ? '插画暂未显示' : '插画正在路上'}</p>{!readOnly && (currentImage && failed[currentImage] ? <button type="button" onClick={() => { setLoaded(state => ({ ...state, [currentImage]: false })); setFailed(state => ({ ...state, [currentImage]: false })); }}>重新加载</button> : shown.page.image.status === 'failed' && !isDemo(job) ? <button type="button" disabled={busy} onClick={() => onAction?.('resume')}>重试插画</button> : null)}</div>}
+          {currentImage && !failed[currentImage] ? <div className="comic-image" aria-busy={!loaded[currentImage]}><img src={currentImage} {...presetArtSize(currentImage)} decoding="async" fetchPriority="high" alt={shown.page.alt || `${shown.story.title}，${shown.page.title}`} onLoad={() => setLoaded(state => ({ ...state, [currentImage]: true }))} onError={() => setFailed(state => ({ ...state, [currentImage]: true }))} />{!loaded[currentImage] && <p className="comic-loading" role="status">插画加载中…</p>}</div> : <div className="image-waiting" role="status"><p>{readOnly || shown.page.image.status === 'failed' || failed[currentImage || ''] ? '插画暂未显示' : '插画正在路上'}</p>{!readOnly && (currentImage && failed[currentImage] ? <button type="button" onClick={() => { setLoaded(state => ({ ...state, [currentImage]: false })); setFailed(state => ({ ...state, [currentImage]: false })); }}>重新加载</button> : shown.page.image.status === 'failed' && !isDemo(job) ? <button type="button" disabled={busy} onClick={() => onAction?.('resume')}>重试插画</button> : null)}</div>}
         </figure>}
         <Prose text={shown.page.text} /><span className="page-flower" aria-hidden="true">◇</span>
       </article> : isLesson && job.lesson ? <article className="notes-page"><div className="page-heading"><span className="page-sequence">解</span><h1 ref={heading} tabIndex={-1}>故事之后：{job.concept}</h1></div><Prose text={job.lesson.definition} /><h2>关键关系</h2>{job.lesson.principles.map((p, i) => <div className="principle" key={i}><span>{i + 1}</span><Prose text={p} /></div>)}<h2>回到学理</h2><Prose text={job.lesson.academicExplanation} />{job.lesson.mapping.length > 0 && <><h2>在故事里找到依据</h2>{job.lesson.mapping.map((m, i) => <section className="mapping" key={i}><span>{job.stories.find(s => s.id === m.storyId)?.title}</span><blockquote>{m.quote}</blockquote><Prose text={m.explanation} /></section>)}</>}{job.lesson.workedExample && <><h2>换个例子</h2><Prose text={job.lesson.workedExample} /></>}<h2>哪些地方不能照搬</h2>{job.lesson.boundaries.map((p, i) => <Prose text={p} key={i} />)}{job.knowledge && job.knowledge.sources.length > 0 && <><h2>延伸阅读</h2><p className="source-notice">以下书目由模型提供，尚未独立核验。</p><ul className="sources">{job.knowledge.sources.map((s, i) => <li key={i}>{s.url && /^https?:\/\//.test(s.url) ? <a href={s.url} target="_blank" rel="noreferrer">{s.title} ↗</a> : s.title}<span>{s.authors} · {s.year}</span></li>)}</ul></>}</article> : <article className="notes-page"><div className="page-heading"><span className="page-sequence">议</span><h1 ref={heading} tabIndex={-1}>把理解带到别处。</h1></div>{job.tasks.map(task => <Question key={task.id} task={task} />)}{job.discussion.map((d, i) => <section className="question" key={i}><h3>{d.prompt}</h3><details><summary>展开思路</summary><Prose text={d.guidance} /></details></section>)}{job.tasks.length === 0 && job.discussion.length === 0 && <p>讨论题正在整理，可以先回看故事。</p>}</article>}
@@ -211,9 +212,16 @@ function LibraryController({ user, legacyCount, onSession, onAuthLost, onOpenBoo
   const [importing, setImporting] = useState(false);
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
-    let cancelled = false; setLoading(true); setError('');
-    api.jobs().then(result => { if (!cancelled) setJobs(result.jobs); }).catch(e => { if (cancelled) return; if (authRequired(e)) { setJobs([]); onAuthLost(); } else setError(publicMessage(e)); }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    setLoading(true); setError('');
+    return watchRead(api.jobs, {
+      receive: result => { setJobs(result.jobs); setLoading(false); setError(''); },
+      failed: error => {
+        setLoading(false);
+        if (authRequired(error)) { setJobs([]); onAuthLost(); return false; }
+        setError(reconnectable(error) ? '连接中断，正在重新连接。' : publicMessage(error));
+        return reconnectable(error);
+      },
+    });
   }, [user.username, refresh]);
   useEffect(() => {
     if (loading || !restorePosition) return;
@@ -316,17 +324,27 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
   useEffect(() => {
     if (!user) return;
     prepareActiveStorage(user.username);
-    let cancelled = false;
     const id = params.get('job');
-    const verify = <T,>(request: Promise<T>) => request.catch(e => { if (!cancelled && authRequired(e)) lostAuth(); throw e; });
-    Promise.allSettled([verify(api.jobs()), id ? verify(api.job(id)) : Promise.resolve(null)] as const).then(([list, current]) => {
-      if (cancelled) return;
-      if ((list.status === 'rejected' && authRequired(list.reason)) || (current.status === 'rejected' && authRequired(current.reason))) { lostAuth(); return; }
-      if (list.status === 'fulfilled') setJobs(list.value.jobs); else setError(publicMessage(list.reason));
-      if (current.status === 'fulfilled' && current.value) accept(current.value.job);
-      else if (current.status === 'rejected') { if (current.reason instanceof ApiError && [403, 404].includes(current.reason.status)) { selectedJob.current = ''; setJob(null); } setError(publicMessage(current.reason)); }
+    return watchRead(() => Promise.allSettled([api.jobs(), id ? api.job(id) : Promise.resolve(null)] as const), {
+      receive: ([list, current]) => {
+        if ((list.status === 'rejected' && authRequired(list.reason)) || (current.status === 'rejected' && authRequired(current.reason))) { lostAuth(); return; }
+        if (list.status === 'fulfilled') {
+          setJobs(list.value.jobs); setOffline(false);
+          if (!id && !params.has('demo') && !selectedJob.current) {
+            const unfinished = newestBooks(list.value.jobs).find(active);
+            if (unfinished) accept(unfinished);
+          }
+        }
+        if (current.status === 'fulfilled' && current.value && (!selectedJob.current || selectedJob.current === id)) accept(current.value.job);
+        if (current.status === 'rejected') {
+          if (current.reason instanceof ApiError && [403, 404].includes(current.reason.status)) { selectedJob.current = ''; setJob(null); }
+          throw current.reason;
+        }
+        if (list.status === 'rejected') throw list.reason;
+        setError('');
+      },
+      failed: error => { if (authRequired(error)) { lostAuth(); return false; } setError(reconnectable(error) ? '连接中断，正在重新连接。' : publicMessage(error)); return reconnectable(error); },
     });
-    return () => { cancelled = true; };
   }, [user?.username]);
   useEffect(() => {
     const online = () => { setOffline(false); setRefreshKey(key => key + 1); };
@@ -337,22 +355,19 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
   useEffect(() => {
     if (!job || isDemo(job) || !user) return;
     const token = ++pollGeneration.current; const id = job.id;
-    let timer: ReturnType<typeof setTimeout>; let cancelled = false;
-    async function poll() {
-      try {
-        const result = await api.job(id);
-        if (cancelled || token !== pollGeneration.current || selectedJob.current !== id) return;
+    return watchRead(() => api.job(id), {
+      receive: result => {
+        if (token !== pollGeneration.current || selectedJob.current !== id) return;
         setOffline(false); setJob(result.job); setJobs(list => upsert(list, result.job));
-        if (active(result.job)) timer = setTimeout(poll, 2500);
-      } catch (e) {
-        if (cancelled || token !== pollGeneration.current) return;
-        if (authRequired(e)) { lostAuth(); return; }
-        if (e instanceof ApiError && e.status === 404) { setJob(null); setError(publicMessage(e)); return; }
-        setOffline(true); timer = setTimeout(poll, 7000);
-      }
-    }
-    if (active(job) || offline || refreshKey) timer = setTimeout(poll, 1000);
-    return () => { cancelled = true; clearTimeout(timer); };
+      },
+      interval: result => active(result.job) ? 2500 : null,
+      failed: error => {
+        if (token !== pollGeneration.current || selectedJob.current !== id) return false;
+        if (authRequired(error)) { lostAuth(); return false; }
+        if (!reconnectable(error)) { setError(publicMessage(error)); if (error instanceof ApiError && [403, 404].includes(error.status)) setJob(null); return false; }
+        setOffline(true); return true;
+      },
+    });
   }, [job?.id, job?.status, user?.username, refreshKey]);
   useEffect(() => {
     if (!sharing || !job || isDemo(job) || !user) return;
@@ -403,7 +418,7 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
       {job && <Progress job={job} busy={busy} offline={offline} onAction={performAction} />}
       {offline && !job && <p className="form-error" role="status">当前离线。恢复连接后可以继续生成。</p>}
       {error && <div className="workspace-error" role="alert"><p>{error}</p><button type="button" onClick={() => setError('')}>收起</button></div>}
-      {user ? <section className="bookshelf"><div className="shelf-heading"><h2><a href="/learn/library">我的书架 <Arrow /></a></h2><span>{jobs.length + libraryPresets.length}</span></div><div className="shelf-list">{[...libraryPresets, ...jobs.filter(item => !isDemo(item))].slice(0, 5).map((item, i) => <button type="button" key={item.id} className={`shelf-item ${job?.id === item.id ? 'selected' : ''}`} disabled={busy || shareBusy} onClick={() => openJob(item)}><span className="shelf-index">{String(i + 1).padStart(2, '0')}</span><span><strong>{item.stories[0]?.title || item.concept}</strong><small>{bookCreationDate(item.createdAt)}{item.format === 'comic' ? ' 作画' : ' 写下'}{item.status !== 'completed' && ` · ${label(item)}`}</small></span><span aria-hidden="true">↗</span></button>)}</div></section> : <p className="guest-compose-note"><a href={authURL('register')}>创建自己的书架</a>，故事下次接着读。</p>}
+      {user ? <section className="bookshelf"><div className="shelf-heading"><h2><a href="/learn/library">我的书架 <Arrow /></a></h2><span>{jobs.length + libraryPresets.length}</span></div><div className="shelf-list">{newestBooks([...libraryPresets, ...jobs.filter(item => !isDemo(item))]).slice(0, 5).map((item, i) => <button type="button" key={item.id} className={`shelf-item ${job?.id === item.id ? 'selected' : ''}`} disabled={busy || shareBusy} onClick={() => openJob(item)}><span className="shelf-index">{String(i + 1).padStart(2, '0')}</span><span><strong>{item.stories[0]?.title || item.concept}</strong><small>{bookCreationDate(item.createdAt)}{item.format === 'comic' ? ' 作画' : ' 写下'}{item.status !== 'completed' && ` · ${label(item)}`}</small></span><span aria-hidden="true">↗</span></button>)}</div></section> : <p className="guest-compose-note"><a href={authURL('register')}>创建自己的书架</a>，故事下次接着读。</p>}
       <button type="button" className="workspace-demo" onClick={() => accept({ ...preset, format: composeFormat })} disabled={busy || shareBusy}>预置示例《雾港渡船》 <Arrow /></button>
     </aside>
     {job ? <Collapsible.Root open={sharing} onOpenChange={changeShareOpen} asChild><div className={`reading-workspace ${sharing ? 'with-share' : ''}`}><Reader key={job.id} job={job} format={format} busy={busy} onFormat={changeFormat} onAction={performAction} storageScope={isDemo(job) ? 'preset' : username} bookArrival={bookArrival} shareControl={user && !isDemo(job) ? <Collapsible.Trigger asChild><button ref={shareTrigger} type="button" className="reader-share-button" disabled={shareBusy}>分享</button></Collapsible.Trigger> : undefined} /><Collapsible.Content ref={shareContent} className="share-disclosure"><SharePanel job={job} share={share} known={shareKnown} loading={shareLoading || (!shareKnown && !shareError)} busy={shareBusy} error={shareError} notice={shareNotice} onCreate={() => void changeSharing('publish')} onRevoke={() => void changeSharing('revoke')} onReload={() => { setShareError(''); setShareKnown(false); setShareRefresh(value => value + 1); }} onClose={() => changeShareOpen(false)} /></Collapsible.Content></div></Collapsible.Root> : <div className="reading-workspace"><Welcome format={composeFormat} onDemo={() => accept({ ...preset, format: composeFormat })} /></div>}
@@ -460,7 +475,7 @@ function OwnerPreviewPage({ user, onAuthLost }: { user: UserDTO; onAuthLost: () 
 
 function SessionApp() {
   const [route, setRoute] = useState(0);
-  const [openedBook, setOpenedBook] = useState<JobDTO | null>(null);
+  const [openedBook, setOpenedBook] = useState<{ job: JobDTO; owner: string } | null>(null);
   const [bookArrival, setBookArrival] = useState(false);
   const [shelfReturn, setShelfReturn] = useState<ShelfReturn | null>(null);
   const navigation = useRef<{ transition: ViewTransition | null; timer: number } | null>(null);
@@ -470,6 +485,8 @@ function SessionApp() {
   const library = path === '/learn/library';
   const preview = new URLSearchParams(location.search).get('preview') === 'share';
   const [session, setSession] = useState<SessionResponse>({ user: null, legacyImportCount: 0 });
+  const sessionOwner = useRef<string | null>(null);
+  const sessionRevision = useRef(0);
   const [checking, setChecking] = useState(true);
   const [sessionError, setSessionError] = useState('');
   const [expired, setExpired] = useState(false);
@@ -479,6 +496,15 @@ function SessionApp() {
     const pending = navigation.current; navigation.current = null;
     if (pending) { window.clearTimeout(pending.timer); pending.transition?.skipTransition(); }
     delete document.documentElement.dataset.bookTransition;
+  }
+  function receiveSession(next: SessionResponse) {
+    const owner = next.user?.username || null;
+    if (sessionOwner.current !== owner) {
+      cancelBookTransition(); setOpenedBook(null); setBookArrival(false); setShelfReturn(null); setRecovery(null);
+      if (sessionOwner.current) clearPrivateStorage();
+      sessionOwner.current = owner;
+    }
+    sessionRevision.current++; setSession(next); setChecking(false); setSessionError('');
   }
   useEffect(() => {
     const back = () => {
@@ -492,6 +518,7 @@ function SessionApp() {
   }, []);
   function openBook(book: JobDTO) {
     if (navigation.current || !session.user) return;
+    const owner = session.user.username;
     const pending = { transition: null as ViewTransition | null, timer: 0 }; navigation.current = pending;
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     let committed = false;
@@ -501,7 +528,7 @@ function SessionApp() {
       history.replaceState({ ...history.state, fableShelfReturn: { x: scrollX, y: scrollY, bookId: book.id } }, '');
       const href = isDemo(book) ? presetURL(book) : `/learn?${new URLSearchParams({ job: book.id, mode: book.format })}`;
       history.pushState({ fableBook: true }, '', href);
-      flushSync(() => { setOpenedBook(book); setBookArrival(!reduce); setShelfReturn(null); setRoute(value => value + 1); });
+      flushSync(() => { setOpenedBook({ job: book, owner }); setBookArrival(!reduce); setShelfReturn(null); setRoute(value => value + 1); });
       const heading = document.querySelector<HTMLHeadingElement>('.reader .page-heading h1');
       const reader = document.querySelector<HTMLElement>('.reader');
       const bounds = heading?.getBoundingClientRect();
@@ -528,16 +555,18 @@ function SessionApp() {
     pending.timer = window.setTimeout(done, 170);
   }
   useEffect(() => {
-    let cancelled = false; setChecking(true); setSessionError('');
-    api.session().then(result => { if (!cancelled) setSession(result); }).catch(e => { if (!cancelled) setSessionError(publicMessage(e)); }).finally(() => { if (!cancelled) setChecking(false); });
-    return () => { cancelled = true; };
+    setChecking(true); setSessionError('');
+    return watchRead(async () => { const revision = sessionRevision.current; return { result: await api.session(), revision }; }, {
+      receive: ({ result, revision }) => { if (revision !== sessionRevision.current) return; receiveSession(result); setChecking(false); setSessionError(''); },
+      failed: error => { setChecking(false); setSessionError(reconnectable(error) ? '连接中断，正在重新连接。' : publicMessage(error)); return reconnectable(error); },
+    });
   }, [refresh]);
-  function authLost() { cancelBookTransition(); setOpenedBook(null); setBookArrival(false); setSession({ user: null, legacyImportCount: 0 }); setExpired(true); setRecovery(null); }
-  async function logout() { await api.logout(); cancelBookTransition(); setOpenedBook(null); clearPrivateStorage(); setSession({ user: null, legacyImportCount: 0 }); setRecovery(null); location.replace('/in'); }
+  function authLost() { receiveSession({ user: null, legacyImportCount: 0 }); setExpired(true); }
+  async function logout() { await api.logout(); clearPrivateStorage(); receiveSession({ user: null, legacyImportCount: 0 }); location.replace('/in'); }
   if (preview && session.user && !checking) return <OwnerPreviewPage key={session.user.username} user={session.user} onAuthLost={authLost} />;
   return <><Header user={session.user} current={home ? 'home' : library ? 'library' : !auth ? 'studio' : undefined} onLogout={logout} />
     {sessionError && <div className="account-banner" role="status">{sessionError}<button type="button" onClick={() => setRefresh(value => value + 1)}>重新连接</button></div>}
-    {recovery ? <RecoveryPage code={recovery.code} username={recovery.username} returnTo={recovery.returnTo} /> : home ? <Home /> : auth ? <AuthController onSession={setSession} onRecovery={setRecovery} /> : checking ? <PageLoading /> : (library || preview) && !session.user ? <PrivateEntry expired={expired} /> : library && session.user ? <LibraryController key={session.user.username} user={session.user} legacyCount={session.legacyImportCount} onSession={setSession} onAuthLost={authLost} onOpenBook={openBook} restorePosition={shelfReturn} /> : <Studio key={`${session.user?.username || 'guest'}:${route}`} user={session.user} onAuthLost={authLost} initialJob={openedBook} bookArrival={bookArrival} />}
+    {recovery ? <RecoveryPage code={recovery.code} username={recovery.username} returnTo={recovery.returnTo} /> : home ? <Home /> : auth ? <AuthController onSession={receiveSession} onRecovery={setRecovery} /> : checking ? <PageLoading /> : (library || preview) && !session.user ? <PrivateEntry expired={expired} /> : library && session.user ? <LibraryController key={session.user.username} user={session.user} legacyCount={session.legacyImportCount} onSession={receiveSession} onAuthLost={authLost} onOpenBook={openBook} restorePosition={shelfReturn} /> : <Studio key={`${session.user?.username || 'guest'}:${route}`} user={session.user} onAuthLost={authLost} initialJob={openedBook && openedBook.owner === session.user?.username ? openedBook.job : null} bookArrival={bookArrival} />}
   </>;
 }
 

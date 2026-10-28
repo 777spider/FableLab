@@ -1,11 +1,16 @@
 import type { AccessResponse, AuthResponse, JobDTO, JobResponse, JobsResponse, LearningFormat, PublicShareResponse, SessionResponse, ShareResponse, StoryLength } from '../shared/contracts';
+import { newestBooks } from './books';
 
 export class ApiError extends Error {
   constructor(message: string, public status: number, public code = '') { super(message); }
 }
 
 async function request<T>(path: string, body?: unknown): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  try {
   const response = await fetch(`/learn/api${path}`, {
+    signal: controller.signal,
     credentials: 'same-origin', cache: 'no-store',
     ...(body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   });
@@ -16,6 +21,10 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
     throw new ApiError(data.error?.message || fallback, response.status, data.error?.code || '');
   }
   return data;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(controller.signal.aborted ? '连接超时，已保存内容仍在，可以重试。' : '连接暂时中断，已保存内容仍在，可以重试。', 0, controller.signal.aborted ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR');
+  } finally { clearTimeout(timeout); }
 }
 
 export const api = {
@@ -39,5 +48,5 @@ export const api = {
 };
 
 export function upsert(jobs: JobDTO[], job: JobDTO): JobDTO[] {
-  return [job, ...jobs.filter(item => item.id !== job.id)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return newestBooks([job, ...jobs.filter(item => item.id !== job.id)]);
 }

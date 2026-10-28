@@ -67,3 +67,8 @@ npm run build
 ```
 
 For the isolated local demo, follow [QUICKSTART.md](QUICKSTART.md). Production deployment still requires its own credentials, settings and acceptance checks.
+
+
+## Reading layout review, 2026-10-29
+
+The sidebar and reading body now use the document scroll. Mobile reading folds the composition area, narrow readers use a native page picker, and sharing expands near its trigger. An isolated browser check passed 56 layout and interaction assertions and captured 38 desktop/mobile views, including long text, comics, notes, account forms and share states. Private and published content in those checks is synthetic. The updated public checkout passed all 87 tests and its production build. See [UI review](UI_REVIEW.md).

@@ -112,7 +112,7 @@ function Question({ task }: { task: TaskDTO }) {
   return <section className="question"><h3>{task.kind === 'comparison' ? '把两个故事放在一起' : task.kind === 'comprehension' ? '回到故事里' : '换一个情境'}</h3><Prose text={task.prompt} /><div className="answer-options">{task.options.map((option, index) => <button type="button" key={option.id} aria-pressed={answer === option.id} onClick={() => setAnswer(option.id)}><span>{String.fromCharCode(65 + index)}</span>{option.text}</button>)}</div>{answer && <div className="answer-feedback" role="status"><strong>{answer === task.correctAnswer ? '这个判断有依据。' : '再看看其中的关系。'}</strong><Prose text={task.explanation} /></div>}</section>;
 }
 
-function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction, readOnly = false, storageScope = 'preset', shareControl, bookArrival = false }: { job: JobDTO; format: LearningFormat; busy?: boolean; onFormat: (f: LearningFormat) => void; onAction?: (a: 'pause' | 'resume') => void; readOnly?: boolean; storageScope?: string; shareControl?: React.ReactNode; bookArrival?: boolean }) {
+function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction, readOnly = false, storageScope = 'preset', shareControl, sharePanel, bookArrival = false }: { job: JobDTO; format: LearningFormat; busy?: boolean; onFormat: (f: LearningFormat) => void; onAction?: (a: 'pause' | 'resume') => void; readOnly?: boolean; storageScope?: string; shareControl?: React.ReactNode; sharePanel?: React.ReactNode; bookArrival?: boolean }) {
   const comicAvailable = job.storyLength !== 'long' && (!isDemo(job) || job.stories.some(story => story.pages.some(page => page.image.status === 'ready' && page.image.url)));
   const format = comicAvailable ? requestedFormat : 'text';
   const storageKey = `fable-studio:page:${storageScope}:${job.id}`;
@@ -120,7 +120,7 @@ function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction
   const [failed, setFailed] = useState<Record<string, boolean>>({});
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const heading = useRef<HTMLHeadingElement>(null);
-  const scroll = useRef<HTMLDivElement>(null);
+  const reader = useRef<HTMLElement>(null);
   const pages = job.stories.flatMap((story, si) => story.pages.map((page, pi) => ({ story, si, page, pi, key: `${story.id}/${page.id}` })));
   const index = position === 'lesson' ? pages.length : position === 'discussion' ? pages.length + 1 : Math.max(0, pages.findIndex(p => p.key === position));
   const shown = index < pages.length ? pages[index] : null;
@@ -129,7 +129,7 @@ function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction
   const currentStory = shown?.si ?? 0;
   const isLesson = index === pages.length;
   const canNext = index < pages.length - 1 || (!!job.lesson && index < pages.length + 1);
-  const choose = (key: string) => { setPosition(key); saveStorage(storageKey, key); requestAnimationFrame(() => { if (scroll.current) scroll.current.scrollTop = 0; heading.current?.focus({ preventScroll: true }); }); };
+  const choose = (key: string) => { setPosition(key); saveStorage(storageKey, key); requestAnimationFrame(() => { reader.current?.scrollIntoView({ block: 'start', behavior: 'auto' }); heading.current?.focus({ preventScroll: true }); }); };
   const turn = (to: number) => choose(to < pages.length ? pages[to].key : to === pages.length ? 'lesson' : 'discussion');
   useEffect(() => { if (!position && pages[0]) { setPosition(pages[0].key); saveStorage(storageKey, pages[0].key); } }, [pages[0]?.key]);
   useEffect(() => {
@@ -152,11 +152,12 @@ function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction
     document.addEventListener('keydown', keys); return () => document.removeEventListener('keydown', keys);
   }, [index, canNext, pages.length]);
   if (pages.length === 0) return <section className="reader-loading"><span className="loading-line" /><span className="loading-line" /><span className="loading-line" /><h2>故事正在成篇。</h2><p>写好的内容会先出现在这里。</p></section>;
-  return <section className={`reader reader-${format}`} aria-label="阅读故事" data-book-arrival={bookArrival || undefined}>
+  return <section ref={reader} className={`reader reader-${format}`} aria-label="阅读故事" data-book-arrival={bookArrival || undefined}>
     <header className="reader-top"><span>{job.concept}{job.provenance === 'preset' && <span className="preset-note">预置示例</span>}</span><div className="reader-tools"><FormatSwitch format={format} onChange={onFormat} disabled={busy} comicDisabled={!comicAvailable} />{shareControl}</div></header>
+    {sharePanel}
     {job.provenance !== 'preset' && <p className={`quality-note ${job.quality === 'needs_review' ? 'needs-review' : ''}`} role="status">{job.quality === 'pending' ? '初稿可读，学理复核中' : job.quality === 'needs_review' ? '这份内容仍需复核，请结合教材与原始文献核对。' : '机器初检完成，学术来源待核验'}</p>}
     <nav className="story-tabs" aria-label="故事与学理">{job.stories.map((story, i) => <button type="button" key={story.id} disabled={!story.pages.length} aria-current={shown && shown.si === i ? 'page' : undefined} onClick={() => story.pages[0] && choose(`${story.id}/${story.pages[0].id}`)}>{job.stories.length > 1 && <span>{String(i + 1).padStart(2, '0')}</span>}{story.title}</button>)}<div className="notes-tabs"><button type="button" disabled={!job.lesson} aria-current={isLesson ? 'page' : undefined} onClick={() => choose('lesson')} title="学术解析">解</button><button type="button" disabled={!job.lesson} aria-current={index === pages.length + 1 ? 'page' : undefined} onClick={() => choose('discussion')} title="讨论与应用">议</button></div></nav>
-    <div className="reading-scroll" ref={scroll} tabIndex={0} aria-label="当前页内容">
+    <div className="reading-content">
       {shown ? <article className={`reading-page ${format === 'comic' ? 'comic-page' : 'text-page'}`}>
         <div className="page-heading"><span className="page-sequence">{String(shown.pi + 1).padStart(2, '0')}</span><h1 ref={heading} tabIndex={-1}>{shown.page.title}</h1></div>
         {format === 'comic' && <figure className="comic-frame">
@@ -165,7 +166,7 @@ function Reader({ job, format: requestedFormat, busy = false, onFormat, onAction
         <Prose text={shown.page.text} /><span className="page-flower" aria-hidden="true">◇</span>
       </article> : isLesson && job.lesson ? <article className="notes-page"><div className="page-heading"><span className="page-sequence">解</span><h1 ref={heading} tabIndex={-1}>故事之后：{job.concept}</h1></div><Prose text={job.lesson.definition} /><h2>关键关系</h2>{job.lesson.principles.map((p, i) => <div className="principle" key={i}><span>{i + 1}</span><Prose text={p} /></div>)}<h2>回到学理</h2><Prose text={job.lesson.academicExplanation} />{job.lesson.mapping.length > 0 && <><h2>在故事里找到依据</h2>{job.lesson.mapping.map((m, i) => <section className="mapping" key={i}><span>{job.stories.find(s => s.id === m.storyId)?.title}</span><blockquote>{m.quote}</blockquote><Prose text={m.explanation} /></section>)}</>}{job.lesson.workedExample && <><h2>换个例子</h2><Prose text={job.lesson.workedExample} /></>}<h2>哪些地方不能照搬</h2>{job.lesson.boundaries.map((p, i) => <Prose text={p} key={i} />)}{job.knowledge && job.knowledge.sources.length > 0 && <><h2>延伸阅读</h2><p className="source-notice">以下书目由模型提供，尚未独立核验。</p><ul className="sources">{job.knowledge.sources.map((s, i) => <li key={i}>{s.url && /^https?:\/\//.test(s.url) ? <a href={s.url} target="_blank" rel="noreferrer">{s.title} ↗</a> : s.title}<span>{s.authors} · {s.year}</span></li>)}</ul></>}</article> : <article className="notes-page"><div className="page-heading"><span className="page-sequence">议</span><h1 ref={heading} tabIndex={-1}>把理解带到别处。</h1></div>{job.tasks.map(task => <Question key={task.id} task={task} />)}{job.discussion.map((d, i) => <section className="question" key={i}><h3>{d.prompt}</h3><details><summary>展开思路</summary><Prose text={d.guidance} /></details></section>)}{job.tasks.length === 0 && job.discussion.length === 0 && <p>讨论题正在整理，可以先回看故事。</p>}</article>}
     </div>
-    <footer className="reader-footer"><button type="button" className="turn-page" disabled={index === 0} onClick={() => turn(index - 1)} aria-label="上一页">←</button>{shown ? <nav className="page-numbers" aria-label="逐页目录">{job.stories[currentStory]?.pages.map((page, i) => <button type="button" key={page.id} aria-current={shown.page.id === page.id ? 'page' : undefined} onClick={() => choose(`${job.stories[currentStory].id}/${page.id}`)} aria-label={`第 ${i + 1} 页：${page.title}`}>{i + 1}</button>)}</nav> : <span className="reader-note-position">{isLesson ? '解析' : '讨论与应用'}</span>}<button type="button" className="turn-page" disabled={!canNext} onClick={() => turn(index + 1)} aria-label="下一页">→</button></footer>
+    <footer className="reader-footer"><button type="button" className="turn-page" disabled={index === 0} onClick={() => turn(index - 1)} aria-label="上一页">←</button>{shown ? <div className="reader-pagination"><nav className="page-numbers" aria-label="逐页目录">{job.stories[currentStory]?.pages.map((page, i) => <button type="button" key={page.id} aria-current={shown.page.id === page.id ? 'page' : undefined} onClick={() => choose(`${job.stories[currentStory].id}/${page.id}`)} aria-label={`第 ${i + 1} 页：${page.title}`}>{i + 1}</button>)}</nav><label className="page-picker"><span className="sr-only">跳到某一页</span><select value={shown.key} onChange={event => choose(event.target.value)}>{job.stories[currentStory]?.pages.map((page, i) => <option key={page.id} value={`${job.stories[currentStory].id}/${page.id}`}>第 {i + 1} / {job.stories[currentStory].pages.length} 页</option>)}</select></label></div> : <span className="reader-note-position">{isLesson ? '解析' : '讨论与应用'}</span>}<button type="button" className="turn-page" disabled={!canNext} onClick={() => turn(index + 1)} aria-label="下一页">→</button></footer>
   </section>;
 }
 
@@ -280,6 +281,7 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
   });
   const { concept, format: composeFormat, storyLength } = draft;
   const [format, setFormat] = useState<LearningFormat>(() => initialJob?.format || modeFromURL());
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [jobs, setJobs] = useState<JobDTO[]>([]);
   const [job, setJob] = useState<JobDTO | null>(() => { if (initialJob && (user || isDemo(initialJob))) return initialJob; const example = presetForDemo(params.get('demo')); return example ? { ...example, format: modeFromURL() } : null; });
   const [error, setError] = useState('');
@@ -417,6 +419,7 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
     event.preventDefault(); if (!concept.trim() || offline) return;
     if (!user) { saveSession(draftKey('guest'), JSON.stringify(draft)); location.assign(authURL('login', `/learn?${new URLSearchParams({ mode: composeFormat, storyLength })}`)); return; }
     await mutate(async () => {
+      setWorkspaceOpen(true);
       const value = concept.trim();
       if (requestKey.current?.concept !== value || requestKey.current.format !== composeFormat || requestKey.current.storyLength !== storyLength) requestKey.current = { concept: value, format: composeFormat, storyLength, id: crypto.randomUUID() };
       saveSession(pendingKey(username), JSON.stringify(requestKey.current));
@@ -437,7 +440,9 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
   }
   if (!user && params.get('job')) return <PrivateEntry />;
   return <main id="main" className="studio">
-    <aside className="workspace">
+    <aside className={`workspace ${job ? 'has-reader' : ''}`} data-expanded={workspaceOpen}>
+      {job && <button type="button" className="workspace-toggle" aria-expanded={workspaceOpen} aria-controls="studio-workspace" onClick={() => setWorkspaceOpen(open => !open)}>创作与书架<span aria-hidden="true">{workspaceOpen ? '−' : '+'}</span></button>}
+      <div id="studio-workspace" className="workspace-content">
       <div className="compose"><h1>今天，想读懂什么？</h1><form onSubmit={generate}><label className="sr-only" htmlFor="concept">想了解的概念</label><textarea id="concept" value={concept} onChange={e => updateDraft({ concept: e.target.value })} rows={3} maxLength={120} placeholder="熵、贝叶斯推断、机会成本…" required disabled={busy} /><div className="compose-bottom"><FormatSwitch format={composeFormat} onChange={next => updateDraft({ format: next })} disabled={busy} /><button className="button primary" disabled={busy || offline || !concept.trim()}>{busy ? '处理中…' : user ? '生成故事' : '登录后生成'}<Arrow /></button></div>{composeFormat === 'text' && <div className="story-length-row"><div className="story-length-switch" role="group" aria-label="文字篇幅">{(['standard', 'long'] as const).map(length => <button type="button" key={length} aria-pressed={storyLength === length} disabled={busy} onClick={() => updateDraft({ storyLength: length })}>{length === 'long' ? '长篇' : '标准'}</button>)}</div>{storyLength === 'long' && <span>8–16页</span>}</div>}</form>
       {!job && <div className="concept-suggestions">{['沉没成本', '机制识别', '涌现'].map(value => <button key={value} type="button" onClick={() => { updateDraft({ concept: value }); document.getElementById('concept')?.focus(); }}>{value} ↗</button>)}</div>}</div>
       {job && <Progress job={job} busy={busy} offline={offline} onAction={performAction} />}
@@ -445,8 +450,9 @@ function Studio({ user, onAuthLost, initialJob = null, bookArrival = false }: { 
       {error && <div className="workspace-error" role="alert"><p>{error}</p><button type="button" onClick={() => setError('')}>收起</button></div>}
       {user ? <section className="bookshelf"><div className="shelf-heading"><h2><a href="/learn/library" onClick={navigateWithinApp}>我的书架 <Arrow /></a></h2><span>{jobs.length + libraryPresets.length}</span></div><div className="shelf-list">{newestBooks([...libraryPresets, ...jobs.filter(item => !isDemo(item))]).slice(0, 5).map((item, i) => <button type="button" key={item.id} className={`shelf-item ${job?.id === item.id ? 'selected' : ''}`} disabled={busy || shareBusy} onClick={() => openJob(item)}><span className="shelf-index">{String(i + 1).padStart(2, '0')}</span><span><strong>{item.stories[0]?.title || item.concept}</strong><small>{bookCreationDate(item.createdAt)}{item.format === 'comic' ? ' 作画' : ' 写下'}{item.status !== 'completed' && ` · ${label(item)}`}</small></span><span aria-hidden="true">↗</span></button>)}</div></section> : <p className="guest-compose-note"><a href={authURL('register')}>创建自己的书架</a>，故事下次接着读。</p>}
       <button type="button" className="workspace-demo" onClick={() => accept({ ...preset, format: composeFormat })} disabled={busy || shareBusy}>预置示例《雾港渡船》 <Arrow /></button>
+      </div>
     </aside>
-    {job ? <Collapsible.Root open={sharing} onOpenChange={changeShareOpen} asChild><div className={`reading-workspace ${sharing ? 'with-share' : ''}`}><Reader key={job.id} job={job} format={format} busy={busy} onFormat={changeFormat} onAction={performAction} storageScope={isDemo(job) ? 'preset' : username} bookArrival={bookArrival} shareControl={user && !isDemo(job) ? <Collapsible.Trigger asChild><button ref={shareTrigger} type="button" className="reader-share-button" disabled={shareBusy}>分享</button></Collapsible.Trigger> : undefined} /><Collapsible.Content ref={shareContent} className="share-disclosure"><SharePanel job={job} share={share} known={shareKnown} loading={shareLoading || (!shareKnown && !shareError)} busy={shareBusy} error={shareError} notice={shareNotice} onCreate={() => void changeSharing('publish')} onRevoke={() => void changeSharing('revoke')} onReload={() => { setShareError(''); setShareKnown(false); setShareRefresh(value => value + 1); }} onClose={() => changeShareOpen(false)} /></Collapsible.Content></div></Collapsible.Root> : <div className="reading-workspace"><Welcome format={composeFormat} onDemo={() => accept({ ...preset, format: composeFormat })} /></div>}
+    {job ? <Collapsible.Root open={sharing} onOpenChange={changeShareOpen} asChild><div className="reading-workspace"><Reader key={job.id} job={job} format={format} busy={busy} onFormat={changeFormat} onAction={performAction} storageScope={isDemo(job) ? 'preset' : username} bookArrival={bookArrival} sharePanel={<Collapsible.Content ref={shareContent} className="share-disclosure"><SharePanel job={job} share={share} known={shareKnown} loading={shareLoading || (!shareKnown && !shareError)} busy={shareBusy} error={shareError} notice={shareNotice} onCreate={() => void changeSharing('publish')} onRevoke={() => void changeSharing('revoke')} onReload={() => { setShareError(''); setShareKnown(false); setShareRefresh(value => value + 1); }} onClose={() => changeShareOpen(false)} /></Collapsible.Content>} shareControl={user && !isDemo(job) ? <Collapsible.Trigger asChild><button ref={shareTrigger} type="button" className="reader-share-button" disabled={shareBusy}>分享</button></Collapsible.Trigger> : undefined} /></div></Collapsible.Root> : <div className="reading-workspace"><Welcome format={composeFormat} onDemo={() => accept({ ...preset, format: composeFormat })} /></div>}
   </main>;
 }
 

@@ -1,11 +1,13 @@
 # Contributing
 
-Small, focused contributions are welcome. Explain the user need in an issue before starting a substantial feature or a new model integration.
+Small, focused contributions are welcome. Explain the user need before a substantial feature or model integration.
 
-Use Node.js 24 or newer. Install with `npm ci`, run `npm test`, and check `npm run build`. See [the synthetic quickstart](docs/QUICKSTART.md) for a local demo without a model key or network generation.
+Use Node.js 24+. Run `npm ci`, `npm test`, and `npm run build`. `npm run local` builds and starts the personal BYOK edition; the built-in reader example requires no credentials.
 
-Preserve the read–explain–discuss flow, ownership checks for private content, revocable sharing, and resumable jobs. Keep tests independent of real accounts, model services, production settings, and paid requests. New provider work should implement the existing `GenerationProvider` boundary and include synthetic or mocked tests.
+Preserve its two modes, text and comics, and the read–explain–discuss flow. Do not add default accounts, a persistent bookshelf, a shared author key, or hidden paid capability probes. Use explicit protocol adapters, preserve unknown capability states, and distinguish image output from vision input.
 
-Do not contribute credentials, cookies, recovery codes, private learning content, server logs, local paths, or production screenshots. Check staged files even when `.gitignore` excludes the usual sensitive locations. Use [the security policy](SECURITY.md) for vulnerabilities.
+Keep tests independent of real accounts and paid services. Provider tests should exercise real SDK request/response paths with synthetic upstream responses. Cover endpoint/key changes, error sanitization, browser isolation, and generated media access. Historical full-Studio regression tests remain; the default runtime does not mount those APIs.
 
-By submitting a contribution, you agree to make it available under this project's [MIT License](LICENSE). Keep the required license and copyright information when adding third-party code or assets.
+Never contribute credentials, private content, logs, local machine paths, or screenshots with keys. Check staged files even when ignored locations exclude common sensitive files. Follow [SECURITY.md](SECURITY.md) for vulnerabilities.
+
+Application contributions use the [MIT License](LICENSE). Preserve third-party notices and asset licenses.

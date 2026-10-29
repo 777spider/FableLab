@@ -1,48 +1,49 @@
-# 本地合成演示
+# 本地运行：开源 BYOK 版
 
-需要 Node.js 24+ 和 npm。应用使用 Node 内置 SQLite。以下流程只运行固定合成资料和 1×1 占位图，不调用模型、不需要密钥。它适合验证界面、存储、恢复和分享，不能证明真实生成质量或学术准确性。
+安装 Node.js 24+。在克隆的仓库中执行：
 
-在项目目录安装并构建：
-
-```text
+```sh
 npm ci
-npm test
-npm run build
-```
-
-PowerShell：
-
-```powershell
-$env:NODE_ENV = 'development'
-$env:STUDIO_HOST = '127.0.0.1'
-$env:STUDIO_PORT = '4318'
-$env:STUDIO_DATA_DIR = './data-demo'
-$env:STUDIO_SYNTHETIC = '1'
-$env:STUDIO_ENABLE_AI = '0'
-Remove-Item Env:ECNU_API_KEY -ErrorAction SilentlyContinue
 npm run local
 ```
 
-macOS / Linux：
+浏览器打开 `http://127.0.0.1:4318/learn/`。无需账户、邀请码、数据库或作者的 Key。`npm run local` 每次先进行类型检查和前端构建，以免更新代码后继续看到旧界面。
+
+## 第一次配置
+
+右上角打开 **API 设置**。先填文字服务的接口类型、Base URL、API Key 和模型名称。如果服务实现了 OpenAI 对话协议，选择 **Chat Completions**；不是所有兼容服务都实现 Responses。
+
+只生成文字，生图栏保持空模型即可。生成漫画时，另填生图服务，选择对应的 Images、Gemini 或 OpenRouter 协议。两栏不共用 Key，不会把文字 Key 自动转发给另一家生图服务。
+
+模型列表读取失败不一定影响生成：服务可能没提供列模型接口，可手动填写模型名称。“验证生图（1张）”会请求一张测试图，可能计费。系统不会在读取列表时悄悄生图。
+
+本机模型示例：将 Ollama 或 LM Studio 自己启动，确认已提供 OpenAI 兼容接口，文字栏选 Chat Completions，地址填其 `http://localhost:<端口>/v1`，填写已加载的模型。是否免 Key 由本机服务决定。它们不会因为能接收图片就自动具备生图能力。
+
+## 保存、刷新与退出
+
+保存设置后可生成。页面刷新会接回同一浏览器当前任务；正常浏览器窗口与隐私窗口互相隔离。关闭页面不终止任务，前提是运行服务的终端仍开着。
+
+Key 只在本地进程内存中存在。停止或重启服务后需重填，不会从 `.env`、系统 OpenAI/ECNU Key 或作者配置中读取凭据。
+
+文字可在左侧导出 Markdown。这里没有持久书架；停止服务前请导出要保留的内容。临时故事和图片在正常退出时移除；强制杀进程可能留下无 Key 的临时内容。保留这些临时文件不表示下一次运行会恢复它们。
+
+## 更换端口（PowerShell）
+
+```powershell
+$env:FABLELAB_PORT = '4320'
+npm run local
+```
+
+打开新端口对应的本机地址。`FABLELAB_HOST` 仅接受 `127.0.0.1`、`localhost` 或 `::1`；不是对公网提供服务的开关。
+
+## 开发
 
 ```sh
-NODE_ENV=development STUDIO_HOST=127.0.0.1 STUDIO_PORT=4318 STUDIO_DATA_DIR=./data-demo STUDIO_SYNTHETIC=1 STUDIO_ENABLE_AI=0 ECNU_API_KEY= npm run local
+npm run dev
 ```
 
-打开 <http://127.0.0.1:4318/in>，使用本地演示邀请码 `1025` 注册一个自建账户。可体验文字或漫画、读—解—议、书架及可撤销分享。新任务生成一则故事，预置示例和旧格式仍支持两则故事。合成漫画占位图很小，属于预期行为。
+另开一个终端执行 `npx vite`，访问 `http://127.0.0.1:5174/learn/`。默认开发代理连接 4318 端口。改后端端口时，也需调整 `vite.config.ts` 的开发代理。
 
-以上命令绑定 `127.0.0.1`，演示资料写入独立的 `data-demo/`；未配置 `STUDIO_DATA_DIR` 时程序默认使用 `data/`。用 `STUDIO_PORT`、`STUDIO_HOST`、`STUDIO_DATA_DIR` 调整实例。运行两个实例时使用不同端口和数据目录；同一数据目录只允许一个服务进程。数据包含账号、会话、内容和分享信息，不应提交到仓库。按 Ctrl+C 停止本地实例。
+`npm run build` 检查并构建，`npm start` 启动已有构建。测试不需要真实服务 Key：`npm test`。
 
-## 使用环境文件
-
-npm 脚本不会自动读取 `.env`。可复制 `.env.example` 为自己的 `.env`，然后直接启动：
-
-```text
-node --env-file=.env --import tsx server/index.ts
-```
-
-示例文件只启用本地合成模式。生产配置需要独立生成的会话密钥、访问码哈希和 HTTPS 站点来源；生产拒绝合成模式和 `1025` 的哈希。详见 [部署](DEPLOYMENT.md)。真实接口需另外阅读 [模型服务边界](MODEL_SERVICE.md)。
-
-## 开发界面
-
-先在一个终端启动合成后端，再在另一个终端运行 `npx vite`，打开 <http://127.0.0.1:5174/learn/>。开发代理指向本地 4318 端口。正式自部署使用构建结果和 Node 服务。
+旧完整平台的账号、邀请码、`STUDIO_*` 和 `ECNU_*` 配置，仅适用于 `full-studio-20261029` 标签，不属于本版本的运行要求。

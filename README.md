@@ -4,105 +4,90 @@
 
 **Read the story. Unpack the concept.**
 
-A self-hostable, Chinese-first learning app that turns a difficult concept into a fable, then connects the story back to the underlying ideas.
+Turn an abstract concept into a Chinese story or illustrated story, using your own AI services.
 
 [![Check](https://github.com/777spider/FableLab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777spider/FableLab/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-315b49)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-24%2B-315b49)](https://nodejs.org/)
 
-[Try the public example](https://yuyan.aiecnu.site/learn?demo=1&mode=comic) · [中文](README.zh-CN.md) · [Quick start](#quick-start-no-api-key) · [MIT](LICENSE)
+[Research group ↗](https://aiecnu.site) · [简体中文](README.zh-CN.md) · [Quick start](#quick-start) · [API guide](docs/MODEL_SERVICE.md)
 
 </div>
 
-![FableLab's public preset: an illustrated ferry story beside its text, with page navigation and explanation and discussion tabs.](docs/assets/fablelab-comic.webp)
+![FableLab open-source edition: a quiet paper-colored workspace for creating text stories and comics with your own API.](docs/assets/fablelab-byok.png)
 
-<sub>Actual public preset, with AI-assisted artwork. The pictured preset retains two stories; newly generated lessons use one. The local mock generator uses fixed text and placeholder images.</sub>
+## Two ways to create
 
-## A story, then a closer look
+- **Text story:** enter a concept, read one fable, then explore the explanation (解) and questions (议).
+- **Comic story:** the same learning flow, with 4–6 AI illustrations. Text and image services can be different.
 
-| Read · 读 | Unpack · 解 | Discuss · 议 |
-| --- | --- | --- |
-| Follow a coherent fable, in text or illustrated pages. Both modes share the same story. | Reveal the formal concept, connect quoted story passages to its relations, and examine where the analogy stops working. | Try practice questions and explore guided discussion prompts. |
+The public edition runs on your computer. **No login, invitation code, bookshelf, or public sharing. No API key or paid quota is supplied by the author.** A built-in reading example works without a key. Generated stories use your own service and quota; the app is not a bundled local AI model.
 
-FableLab also includes a private bookshelf, account recovery codes, and read-only snapshot links you can revoke. Generation continues on the server after closing the browser or logging out. Returning to the account restores its active task; temporary failures use persisted, bounded backoff that survives restart. Explicit pause and the existing content checks remain in place. See [recovery and retry limits](docs/RECOVERY.md).
+## Quick start
 
-Text generation offers **Standard** and optional **Long**. A long story develops more actions, conflicts and consequences across **8–16 natural scenes/pages**, with the page count chosen by the model. Long stories use text and make no image requests; standard text, comics and both built-in examples remain available. See the [writing design](docs/WRITING_DESIGN.md).
-
-Every bookshelf includes two ready-to-read examples: *Fog Harbor Ferry* (simulation, illustrated) and *The Last Slip of Paper* (explainable AI in education, text). New books appear first by creation date. Text covers preview the story opening, with the title below; comic covers retain their artwork. Opening a book gives it a brief lift and cover turn into the reader; reduced-motion preferences keep navigation immediate. Creation dates sit in small type at the lower left of each cover. Complete native Chinese fonts render immediately: sans for prose and controls, serif for titles, with no font downloads. Historical open-source font files and licenses are retained; see [font details](docs/FONTS.md).
-
-The live demo was updated on 2026-10-28 with the revised covers, native reading fonts and faster bookshelf loading. The shelf fetches cover summaries and reuses its current account's in-memory list while checking for updates; ordinary shelf navigation keeps the current page. See [bookshelf performance](docs/SHELF_PERFORMANCE.md).
-
-Text covers now pair story openings with original geometric prints on four muted paper colors. Their identity stays fixed across refreshes and shelf reordering. See the [cover design, open-source references and actual local preview](docs/COVER_DESIGN.md).
-
-This is a learning app prototype. Its educational effects have not been formally evaluated. Generated references remain marked unverified, and machine review does not replace subject-matter review.
-
-[Validation record](docs/VALIDATION.md): local tests, build and mock flows passed. Hosted GitHub Actions also passed installation, tests and the production build.
-
-## Quick start: no API key
-
-Requires **Node.js 24+**, npm, and Git. Allow about five minutes, depending on installation speed.
+Install [Node.js 24+](https://nodejs.org/), then run:
 
 ```sh
 git clone https://github.com/777spider/FableLab.git
 cd FableLab
 npm ci
-npm run build
-```
-
-Start the local mock in **PowerShell**:
-
-```powershell
-$env:NODE_ENV = 'development'
-$env:STUDIO_HOST = '127.0.0.1'
-$env:STUDIO_DATA_DIR = './data-demo'
-$env:STUDIO_SYNTHETIC = '1'
-$env:STUDIO_ENABLE_AI = '0'
 npm run local
 ```
 
-Or on **macOS / Linux**:
+Open **http://127.0.0.1:4318/learn/**. The local launcher checks and builds the current source before starting.
+
+1. Open **API 设置** in the top right.
+2. For text, select a protocol and enter your service's **Base URL, API Key, and model**. A compatible local service may not need a key.
+3. For comics, configure the image service separately. Read the model list if available, or enter a model manually.
+4. Save, enter a concept, and generate a text or comic story.
+
+A provider's monthly chat subscription does not necessarily include API access. Obtain API credentials and model access from your chosen service. No author or institutional service is required.
+
+For a first look without credentials, select **先读一个示例**. This opens curated content and does not call a model.
+
+## Bring your own API
+
+| Purpose | Supported protocol | Examples of compatible services |
+| --- | --- | --- |
+| Text | OpenAI Chat Completions | OpenAI, compatible gateways, DeepSeek/Qwen text services, Ollama or LM Studio with compatible endpoints |
+| Text | OpenAI Responses | OpenAI or a service implementing Responses |
+| Text | Anthropic Messages | Anthropic or a compatible Messages endpoint |
+| Text | Google Gemini | Gemini generateContent |
+| Text | OpenRouter | OpenRouter chat API |
+| Images | OpenAI Images | Services implementing `/images/generations` |
+| Images | Google Gemini | Gemini models with image output |
+| Images | OpenRouter Images | OpenRouter's dedicated Images API |
+
+Adapters use the open-source [Vercel AI SDK](https://github.com/vercel/ai) and [official OpenRouter provider](https://github.com/OpenRouterTeam/ai-sdk-provider). Compatibility means implementing the selected protocol; an arbitrary vendor's native image API is not automatically compatible. See [the API guide](docs/MODEL_SERVICE.md) for addresses, limitations, and validation.
+
+**Image input is not image output.** Explicit output-modality metadata is shown as declared support. A list containing only model names remains **unverified**. The optional **验证生图（1张）** button confirms actual image output for the selected configuration. It sends one real request and may incur a charge; it never runs automatically. Text testing may also incur a charge. Auth, quota, or network failures are not treated as proof that a model lacks image output.
+
+## Reading and data
+
+The reader keeps its page selector, arrows, 解 and 议 visible while content scrolls inside. Keyboard arrows work outside form fields and dialogs. Text uses complete device fonts, without downloading Chinese font slices.
+
+- Keys stay in the local server's memory for the browser session. They are not written to localStorage, job files, exports, or application logs. Changing the endpoint does not inherit its old key.
+- Requests travel from your local server to the service you configure. Your prompts and content are subject to that service's policies.
+- Refreshing the same browser can reconnect while the local service runs. Generation continues when the page is closed, provided the local service remains running.
+- Working story checkpoints and images live in an application-owned temporary directory; graceful shutdown removes them. A forced crash can leave temporary content behind, but no saved API keys. Restarting the service clears keys and does not restore earlier tasks. **Export text before stopping.** This edition has no persistent library.
+- SDK retries are disabled. Application retries are bounded: at most two calls per stage and 24 attempts per task, including images. The app may need additional text calls for validation or repair; a comic uses one image request per page, plus bounded retries.
+
+Machine review and model-provided references are not independent academic verification. Educational effects have not been established in a controlled study. [Source and inspiration notes](SOURCES.md) distinguish design inspiration from evidence.
+
+## Development
 
 ```sh
-NODE_ENV=development STUDIO_HOST=127.0.0.1 STUDIO_DATA_DIR=./data-demo STUDIO_SYNTHETIC=1 STUDIO_ENABLE_AI=0 npm run local
+npm test
+npm run build
+npm start
 ```
 
-Open [localhost:4318/in](http://127.0.0.1:4318/in). Read the built-in example, or register with the local development invitation code **`1025`** and generate a mock lesson. Passwords require at least six characters; keep the recovery code shown at registration. There is no email recovery.
+`npm start` serves the existing build. For live development, run `npm run dev` and `npx vite` in separate terminals. The default server binds to loopback only. See [local setup](docs/QUICKSTART.md), [operation boundaries](docs/DEPLOYMENT.md), and [validation](docs/VALIDATION.md).
 
-Mock generation makes no model calls. It checks the workflow with fixed content and tiny placeholder images; it does not demonstrate live model quality. This demo's accounts and lessons are stored in `data-demo/`. Stop with **Ctrl+C**. See the [full local guide](docs/QUICKSTART.md) for configuration and development.
-
-## Bring a model service
-
-The current live adapter targets **ECNU's text and image services**. You need your own eligible account and server-side credentials. Enable `STUDIO_ENABLE_AI=1`, supply `ECNU_API_KEY`, and turn off synthetic mode. Other services require a [`GenerationProvider`](server/generation.ts) implementation; changing a base URL alone is insufficient. Read the [model service guide](docs/MODEL_SERVICE.md).
-
-Generation runs **one job at a time**. Pausing stops local waiting but cannot guarantee that an upstream request has stopped or avoided charges. Production requires independent secrets, an invitation-code hash, and an HTTPS origin; synthetic mode is disabled there. Follow the [deployment guide](docs/DEPLOYMENT.md) before hosting.
-
-## How it fits together
-
-```mermaid
-flowchart LR
-    UI[React 19 + TypeScript] --> API[Node.js 24 + Express]
-    API --> Accounts[(SQLite: accounts and shares)]
-    API --> Jobs[Persistent generation queue]
-    Jobs --> Files[Checkpoints and private media]
-    Jobs --> Provider[GenerationProvider]
-    Provider --> Mock[Local synthetic fixture]
-    Provider --> ECNU[ECNU text and image services]
-```
-
-Vite builds the interface. Credentials stay on the server; lessons are private until their owner publishes a snapshot. Revocation blocks new access to that snapshot and its images; downloaded copies cannot be recalled.
-
-## Inspiration
-
-Inspired by [Anthropic's Amanda Askell sharing her parable prompt in an April 2026 Newcomer interview, at 53:42](https://www.youtube.com/watch?v=0GaKJ4Fp2x4&t=3222s): use a parable to approach an unfamiliar concept indirectly, then explain the concept afterward. FableLab adds an illustrated reader, explicit mappings, practice, persistence, and sharing around that idea. This independent project has no affiliation with or endorsement from Amanda Askell or Anthropic. See [source notes](SOURCES.md).
-
-## Contribute
-
-[Issues](https://github.com/777spider/FableLab/issues) and pull requests are welcome—especially concept corrections with evidence, accessibility improvements, and provider adapters. Use synthetic fixtures for tests and remove private data and credentials from examples.
-
-Run `npm test` and `npm run build` before submitting code changes.
-
-If story-first learning is useful to you, a star helps others discover FableLab.
+The previous full Studio edition is preserved at tag **`full-studio-20261029`**. Some historical modules and their regression tests remain in this checkout, but the default entry point mounts only the BYOK app and never creates account databases. Earlier account, bookshelf, deployment and sharing guides apply only to that archived edition.
 
 ## License
 
-[MIT](LICENSE) · Copyright © 2026 bigWhiteTofu. See [asset provenance](docs/ASSETS.md) for the demo illustrations and the bundled font's separate licenses.
+Application code: [MIT](LICENSE). Third-party SDKs and bundled assets retain their own licenses; see [SOURCES.md](SOURCES.md), [font licenses](docs/FONTS.md), and [art inventory](docs/ASSETS.md).
+
+Research group: **[aiecnu.site](https://aiecnu.site)**.

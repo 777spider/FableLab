@@ -1,16 +1,14 @@
-import {resolve,join} from 'node:path';import {mkdirSync,existsSync,readFileSync,writeFileSync,openSync,closeSync,unlinkSync} from 'node:fs';import {randomBytes,createHash} from 'node:crypto';
-import {createApp} from './app.ts';import {JobService} from './jobs.ts';import {EcnuProvider} from './ecnu.ts';import {SyntheticProvider} from './synthetic.ts';
-import {AuthService} from './auth.ts';import {ShareService} from './share.ts';
-import {validateProductionConfig} from './config.ts';
-const production=process.env.NODE_ENV==='production',dataDir=resolve(process.env.STUDIO_DATA_DIR??'data'),distDir=resolve('dist');mkdirSync(dataDir,{recursive:true,mode:0o700});
-if(production&&process.env.STUDIO_SYNTHETIC==='1')throw new Error('SYNTHETIC_DISABLED_IN_PRODUCTION');
-let cookieSecret=process.env.STUDIO_COOKIE_SECRET;if(!cookieSecret&&!production){const file=join(dataDir,'.cookie-secret');if(!existsSync(file))writeFileSync(file,randomBytes(48).toString('base64url'),{mode:0o600});cookieSecret=readFileSync(file,'utf8');}
-const accessCodeHash=process.env.STUDIO_ACCESS_CODE_HASH??(!production?createHash('sha256').update('1025').digest('hex'):'');
-if(production)validateProductionConfig({synthetic:process.env.STUDIO_SYNTHETIC==='1',cookieSecret,accessCodeHash,publicOrigin:process.env.STUDIO_PUBLIC_ORIGIN});
-if(!cookieSecret||cookieSecret.length<32||!/^[a-f0-9]{64}$/.test(accessCodeHash))throw new Error('STUDIO_ACCESS_ENV_REQUIRED');
-const lock=join(dataDir,'.service-lock');
-function acquire(){try{const fd=openSync(lock,'wx',0o600);writeFileSync(fd,String(process.pid));closeSync(fd);}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;const pid=Number(readFileSync(lock,'utf8'));if(!Number.isSafeInteger(pid)||pid<=0)throw new Error('STUDIO_LOCK_INVALID');try{process.kill(pid,0);}catch(e){if((e as NodeJS.ErrnoException).code==='ESRCH'){unlinkSync(lock);return acquire();}throw e;}throw new Error('STUDIO_ALREADY_RUNNING');}}
-acquire();const provider=process.env.STUDIO_SYNTHETIC==='1'?new SyntheticProvider():new EcnuProvider({apiKey:process.env.ECNU_API_KEY,enabled:process.env.STUDIO_ENABLE_AI==='1',model:process.env.ECNU_TEXT_MODEL??'ecnu-max',reasoning:process.env.ECNU_TEXT_REASONING??'off',timeoutMs:Number(process.env.ECNU_TEXT_TIMEOUT_MS??240000),traceDir:join(dataDir,'traces')});
-const service=new JobService(dataDir,provider),auth=new AuthService(dataDir),shares=new ShareService(dataDir);const app=createApp(service,{production,cookieSecret,accessCodeHash,publicOrigin:process.env.STUDIO_PUBLIC_ORIGIN,distDir,deploymentHoldFile:join(dataDir,'.deployment-hold')},{auth,shares});
-const port=Number(process.env.STUDIO_PORT??4318),host=process.env.STUDIO_HOST??'127.0.0.1';if(!Number.isSafeInteger(port)||port<1||port>65535)throw new Error('STUDIO_PORT_INVALID');const server=app.listen(port,host,()=>process.stdout.write('FableLab Studio listening at '+host+':'+port+'\n'));
-let stopping=false;const stop=()=>{if(stopping)return;stopping=true;service.shutdown();server.close(()=>{shares.close();auth.close();try{if(readFileSync(lock,'utf8')===String(process.pid))unlinkSync(lock);}catch{}process.exit(0);});setTimeout(()=>process.exit(1),10000).unref();};process.once('SIGINT',stop);process.once('SIGTERM',stop);
+import { resolve } from 'node:path';
+import { createLiteApp } from './lite-app.ts';
+const host = process.env.FABLELAB_HOST ?? '127.0.0.1';
+const port = Number(process.env.FABLELAB_PORT ?? 4318);
+if (!['127.0.0.1', 'localhost', '::1'].includes(host)) throw new Error('FABLELAB_HOST must be a loopback address. Run this edition on your own computer.');
+if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error('FABLELAB_PORT must be 1–65535.');
+const { app, close } = createLiteApp({ host, port, distDir: resolve('dist'), dev: process.env.NODE_ENV !== 'production' });
+const server = app.listen(port, host, () => process.stdout.write(`FableLab · http://${host === '::1' ? '[::1]' : host}:${port}/learn\nAPI keys are supplied by each user in Settings. No author credentials are loaded.\n`));
+let stopping = false;
+const stop = () => { if (stopping) return; stopping = true; close(); server.close(() => process.exit(0)); setTimeout(() => process.exit(1), 5000).unref(); };
+server.once('error', () => { close(); process.stderr.write('Unable to listen. Check whether the local port is already in use.\n'); process.exitCode = 1; });
+process.once('SIGINT', stop); process.once('SIGTERM', stop);
+process.on('message', message => { if (message === 'shutdown') stop(); });
+process.once('disconnect', stop);

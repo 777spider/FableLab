@@ -1,3 +1,5 @@
+> **归档说明 / Archived:** 本文记录原完整 Studio 版（标签 full-studio-20261029）。当前 BYOK 版仅提供文字与漫画，不启用账户、书架或分享。现行指南见 [QUICKSTART.md](QUICKSTART.md)。
+
 # Background generation and recovery
 
 Generation belongs to a server job and the owning account. Closing a browser, losing a polling connection or logging out does not pause that job. When the account returns to `/learn`, the UI retrieves its library and opens its newest active job; a specific `?job=` URL keeps its selected job. Paused and failed jobs remain available in the shelf. Reading positions stay in account-scoped browser storage.

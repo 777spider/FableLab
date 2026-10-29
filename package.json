@@ -1,6 +1,6 @@
 {
-  "name": "fablelab-studio",
-  "version": "0.1.0",
+  "name": "fablelab",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -14,7 +14,13 @@
     "test": "tsx --test tests/server/*.test.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.91",
+    "@ai-sdk/google": "4.0.107",
+    "@ai-sdk/openai": "4.0.104",
+    "@ai-sdk/openai-compatible": "3.0.80",
+    "@openrouter/ai-sdk-provider": "3.1.0",
     "@radix-ui/react-collapsible": "1.2.1",
+    "ai": "7.0.156",
     "express": "^5.1.0",
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",
@@ -31,7 +37,7 @@
     "typescript": "^5.9.0",
     "vite": "^7.1.0"
   },
-  "description": "A self-hosted fable-based concept learning application with text, comics, private libraries and revocable sharing.",
+  "description": "Generate concept-learning stories and comics locally with your own API services. No login or bookshelf.",
   "license": "MIT",
   "author": "bigWhiteTofu",
   "repository": {

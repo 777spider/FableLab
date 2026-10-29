@@ -37,13 +37,17 @@ npm run local
 打开 **http://127.0.0.1:4318/learn/**。启动命令会先检查并构建当前代码。
 
 1. 点右上角 **API 设置**。
-2. 在文字栏选择接口类型，填写服务商给出的 **Base URL、API Key、模型名称**。本机免 Key 服务可以留空 Key。
-3. 要生成漫画，再单独填写生图栏。可以读取模型列表，也可以直接输入模型名称。
+2. 在文字栏**选择服务商，填 Key、选模型**。地址和协议会自动匹配，本机免 Key 服务可以留空 Key。
+3. 要生成漫画，可勾选**文字与生图，共用一个 API**，只填一次 Key、分别选两个模型；也可取消共用，单独选择生图服务。模型支持读取列表或手动填写。
 4. 保存，输入概念，选择文字或漫画并生成。
 
 服务商的聊天会员不一定包含 API 额度，请向你选择的服务商获取 API 凭据与模型权限。无需使用作者或某一机构的服务。首次体验也可直接点 **先读一个示例**：它展示预置内容，不会调用模型。
 
 ## 支持哪些接口
+
+提供 **37 个服务与地域预设**：DeepSeek、阿里百炼、硅基流动、火山方舟、智谱、Kimi、MiniMax、腾讯 TokenHub、百度千帆、阶跃星辰，以及 OpenAI、Claude、Gemini、OpenRouter、Grok、Mistral、Groq、Together、Fireworks、DeepInfra、Cerebras、Perplexity、Hugging Face、Azure OpenAI、Stability AI、fal.ai、Replicate、Ollama、LM Studio 和自定义网关。文字与生图分别只显示已适配的选项，不把读图能力当作生图能力。
+
+常见服务无需手填地址；粘贴服务根地址或完整生成接口也能识别并补全。Azure 需填写自己的资源地址。地址与协议仍可展开修改。完整预设、官方文档及能力边界见 [接口说明](docs/MODEL_SERVICE.md)。
 
 | 用途 | 接口协议 | 适配范围 |
 | --- | --- | --- |
@@ -55,8 +59,10 @@ npm run local
 | 生图 | OpenAI Images | 实现 `/images/generations` 的服务 |
 | 生图 | Google Gemini | 具备图片输出能力的 Gemini 模型 |
 | 生图 | OpenRouter Images | OpenRouter 的独立图片接口 |
+| 生图 | 厂商原生适配 | 硅基流动、MiniMax、智谱、火山方舟 Seedream、Stability AI |
+| 生图 | 官方 SDK | fal.ai、Replicate |
 
-接口适配复用开源的 [Vercel AI SDK](https://github.com/vercel/ai) 和 [OpenRouter 官方适配器](https://github.com/OpenRouterTeam/ai-sdk-provider)。支持某种协议，指服务实现了该协议；不表示任意厂商的原生生图接口都能直接接入。具体地址与边界见 [接口说明](docs/MODEL_SERVICE.md)。
+接口适配复用开源的 [Vercel AI SDK](https://github.com/vercel/ai) 和 [OpenRouter 官方适配器](https://github.com/OpenRouterTeam/ai-sdk-provider)，并为返回结构不同的厂商提供单独适配。37 是服务与地域选项数，不是逐家付费实测数量；具体模型仍取决于账户权限。共用配置只向同一个服务地址发送 Key，更换服务商会清空旧 Key。
 
 **能看图，不等于能生图。** 服务返回明确的图片输出能力时，会标为“接口声明支持生图”；只有模型名称时，仍是“待验证”。主动点 **验证生图（1张）** 才会实际生成测试图，成功后确认当前配置可用。这个操作可能计费，系统不会自动替你发起。文字测试也可能计费。认证、额度和网络错误不会直接被判为模型不能生图。
 

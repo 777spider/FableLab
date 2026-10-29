@@ -37,8 +37,8 @@ npm run local
 Open **http://127.0.0.1:4318/learn/**. The local launcher checks and builds the current source before starting.
 
 1. Open **API 设置** in the top right.
-2. For text, select a protocol and enter your service's **Base URL, API Key, and model**. A compatible local service may not need a key.
-3. For comics, configure the image service separately. Read the model list if available, or enter a model manually.
+2. **Choose a text service, enter your key, and select a model.** The address and protocol fill automatically. A compatible local service may not need a key.
+3. For comics, keep **文字与生图，共用一个 API** checked to share one service and key, with separate text/image models. Uncheck it to choose an independent image service. Read available models or enter their IDs manually.
 4. Save, enter a concept, and generate a text or comic story.
 
 A provider's monthly chat subscription does not necessarily include API access. Obtain API credentials and model access from your chosen service. No author or institutional service is required.
@@ -46,6 +46,8 @@ A provider's monthly chat subscription does not necessarily include API access. 
 For a first look without credentials, select **先读一个示例**. This opens curated content and does not call a model.
 
 ## Bring your own API
+
+**37 service and region presets** cover major Chinese and international providers, including DeepSeek, Alibaba, SiliconFlow, Volcengine, GLM, Kimi, MiniMax, Tencent TokenHub, Baidu, StepFun, OpenAI, Claude, Gemini, OpenRouter, xAI, Mistral, Groq, Together, Fireworks, DeepInfra, Cerebras, Perplexity, Hugging Face, Azure OpenAI, Stability AI, fal.ai, Replicate, Ollama, LM Studio and custom gateways. Each selector only offers its implemented modality. Preset selection fills addresses and protocols; recognized pasted roots or generation endpoints are normalized too. Azure requires your own resource address.
 
 | Purpose | Supported protocol | Examples of compatible services |
 | --- | --- | --- |
@@ -57,8 +59,10 @@ For a first look without credentials, select **先读一个示例**. This opens 
 | Images | OpenAI Images | Services implementing `/images/generations` |
 | Images | Google Gemini | Gemini models with image output |
 | Images | OpenRouter Images | OpenRouter's dedicated Images API |
+| Images | Vendor-specific formats | SiliconFlow, MiniMax, GLM/CogView, Volcengine Seedream, Stability AI |
+| Images | Official SDK adapters | fal.ai, Replicate |
 
-Adapters use the open-source [Vercel AI SDK](https://github.com/vercel/ai) and [official OpenRouter provider](https://github.com/OpenRouterTeam/ai-sdk-provider). Compatibility means implementing the selected protocol; an arbitrary vendor's native image API is not automatically compatible. See [the API guide](docs/MODEL_SERVICE.md) for addresses, limitations, and validation.
+Adapters use the open-source [Vercel AI SDK](https://github.com/vercel/ai), [official OpenRouter provider](https://github.com/OpenRouterTeam/ai-sdk-provider), and small adapters for vendor-specific image responses. Sharing is explicit and restricted to the same service address; switching endpoints clears the old key. Preset counts are not counts of paid vendor tests. Model availability depends on your account. See [the API guide](docs/MODEL_SERVICE.md) for the complete list and limits.
 
 **Image input is not image output.** Explicit output-modality metadata is shown as declared support. A list containing only model names remains **unverified**. The optional **验证生图（1张）** button confirms actual image output for the selected configuration. It sends one real request and may incur a charge; it never runs automatically. Text testing may also incur a charge. Auth, quota, or network failures are not treated as proof that a model lacks image output.
 

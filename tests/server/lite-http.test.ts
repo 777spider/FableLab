@@ -14,6 +14,7 @@ test('public app runs text and comics through SDK, isolates sessions, omits acco
   const fixture = new SyntheticProvider(), calls: string[] = [];
   let hold = false, markStarted: (() => void) | undefined;
   const fetcher = (async (url, init) => {
+    assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer ' + key);
     if (String(url).endsWith('/models')) return json({ data: [{ id: 'fixture-image', architecture: { output_modalities: ['image'] } }, { id: 'fixture-vision', architecture: { output_modalities: ['text'] } }] });
     const body = JSON.parse(String(init?.body)); calls.push(String(url));
     if (hold) { markStarted?.(); await new Promise((_done, reject) => { init?.signal?.addEventListener('abort', () => { hold = false; reject(new DOMException('Aborted', 'AbortError')); }, { once: true }); }); }
@@ -46,6 +47,9 @@ test('public app runs text and comics through SDK, isolates sessions, omits acco
     assert.equal((await request('/learn/api/operations/cancel', {})).response.status, 200);
     assert.equal((await probing).value.error.code, 'ABORTED');
     assert.equal((await request('/learn/api/settings', undefined, undefined, true)).value.settings.text.hasKey, false);
+    const shared = await request('/learn/api/settings', { ...fields, imageUsesText: true, image: { ...fields.image, apiKey: 'must-not-replace-text-key' } });
+    assert.equal(shared.response.status, 200); assert.equal(shared.value.settings.imageUsesText, true); assert.equal(shared.value.settings.image.hasKey, true);
+    assert.ok(!shared.content.includes(key));
     for (const format of ['text', 'comic'] as const) {
       const input = { concept: '测试概念', format, clientRequestId: randomUUID() };
       const created = await request('/learn/api/jobs', input); assert.equal(created.response.status, 202);
@@ -68,6 +72,11 @@ test('public app runs text and comics through SDK, isolates sessions, omits acco
     const readTree = (directory: string): string => readdirSync(directory, { withFileTypes: true }).map(item => item.isDirectory() ? readTree(join(directory, item.name)) : readFileSync(join(directory, item.name)).toString()).join('');
     assert.ok(!readTree(instance.temporaryRoot).includes(key));
     const forbidden = await fetch(base + '/learn/api/settings', { method: 'POST', headers: { Origin: 'https://foreign.example', 'Content-Type': 'application/json', Cookie: cookie }, body: JSON.stringify(fields) }); assert.equal(forbidden.status, 403);
+    const changedSharedKey = await request('/learn/api/settings', { ...fields, text: { ...fields.text, apiKey: 'another-explicit-fixture-key' }, imageUsesText: true });
+    assert.equal(changedSharedKey.value.settings.imageCapability, 'unknown');
+    const { apiKey: _imageKey, ...unlinkedImage } = fields.image;
+    const unlinked = await request('/learn/api/settings', { ...fields, image: unlinkedImage, imageUsesText: false });
+    assert.equal(unlinked.value.settings.image.hasKey, false); assert.equal(unlinked.value.settings.text.hasKey, true);
     const clear = await request('/learn/api/settings', {}, 'DELETE'); assert.equal(clear.value.settings.text.hasKey, false);
   } finally { instance.close(); await new Promise<void>(done => server.close(() => done())); }
 });

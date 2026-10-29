@@ -20,7 +20,7 @@ export interface LiteOptions { distDir: string; port?: number; host?: string; de
 const active = (session: Session) => session.service.list('local').some(job => ['queued', 'running'].includes(job.status));
 const publicSettings = (session: Session): Settings => {
   const expose = <P extends string>({ apiKey, ...rest }: { apiKey: string; protocol: P; baseURL: string; model: string }) => ({ ...rest, hasKey: !!apiKey });
-  return { text: expose(session.configuration.text), image: expose(session.configuration.image), imageCapability: session.imageCapability, textVerified: session.textVerified };
+  return { text: expose(session.configuration.text), image: expose(session.configuration.image), imageUsesText: !!session.configuration.imageUsesText, imageCapability: session.imageCapability, textVerified: session.textVerified };
 };
 export function createLiteApp(options: LiteOptions) {
   const app = express(), sessions = new Map<string, Session>();
@@ -48,7 +48,7 @@ export function createLiteApp(options: LiteOptions) {
     if (!session) {
       if (sessions.size >= 32) throw new GenerationError('SESSION_LIMIT');
       const token = randomBytes(32).toString('hex'), dir = mkdtempSync(join(root, 'session-'));
-      const configuration: Configuration = { text: { protocol: initialSettings.text.protocol, baseURL: initialSettings.text.baseURL, model: '', apiKey: '' }, image: { protocol: initialSettings.image.protocol, baseURL: initialSettings.image.baseURL, model: '', apiKey: '' } };
+      const configuration: Configuration = { text: { protocol: initialSettings.text.protocol, baseURL: initialSettings.text.baseURL, model: '', apiKey: '', service: 'openai' }, image: { protocol: initialSettings.image.protocol, baseURL: initialSettings.image.baseURL, model: '', apiKey: '', service: 'openai' }, imageUsesText: initialSettings.imageUsesText };
       session = { token, dir, configuration, imageCapability: 'unknown', textVerified: false, service: null!, touched: Date.now(), operating: false };
       const current = session;
       current.service = new JobService(dir, new ByokProvider(() => current.configuration, options.fetcher, () => { current.imageCapability = 'verified'; }), { retryDelayMs: options.retryDelayMs, maxStageCalls: 2, attemptBudget: 24 });
@@ -57,7 +57,7 @@ export function createLiteApp(options: LiteOptions) {
     }
     session.touched = Date.now(); return session;
   }
-  app.get('/learn/api/health', (_req, res) => res.json({ status: 'ok', edition: 'byok', version: '0.2.0' }));
+  app.get('/learn/api/health', (_req, res) => res.json({ status: 'ok', edition: 'byok', version: '0.3.0' }));
   app.get('/learn/api/settings', (req, res) => res.json({ settings: publicSettings(sessionFor(req, res)) }));
   app.post('/learn/api/settings', (req, res) => {
     const session = sessionFor(req, res);
